@@ -95,7 +95,7 @@ namespace global_user
     {  
         SMALL, 
         BIG, 
-        BUFF
+        // BUFF
     };
 
     struct TaskData

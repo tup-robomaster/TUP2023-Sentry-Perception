@@ -112,23 +112,23 @@ namespace coordsolver
             };
         }
         //长度为5进入大符模式
-        else if (type == BUFF)
-        {
-            points_world = 
-            {
-                {-0.1125, 0.027, 0},
-                {-0.1125, -0.027, 0},
-                {0, -0.7, -0.05},
-                {0.1125, -0.027, 0},
-                {0.1125, 0.027, 0}
-            };
-            // points_world = {
-            // {-0.1125,0.027,0},
-            // {-0.1125,-0.027,0},
-            // {0,-0.565,-0.05},
-            // {0.1125,-0.027,0},
-            // {0.1125,0.027,0}};
-        }
+        // else if (type == BUFF)
+        // {
+        //     points_world = 
+        //     {
+        //         {-0.1125, 0.027, 0},
+        //         {-0.1125, -0.027, 0},
+        //         {0, -0.7, -0.05},
+        //         {0.1125, -0.027, 0},
+        //         {0.1125, 0.027, 0}
+        //     };
+        //     // points_world = {
+        //     // {-0.1125,0.027,0},
+        //     // {-0.1125,-0.027,0},
+        //     // {0,-0.565,-0.05},
+        //     // {0.1125,-0.027,0},
+        //     // {0.1125,0.027,0}};
+        // }
         cv::Mat rvec;
         cv::Mat rmat;
         cv::Mat tvec;
@@ -156,7 +156,7 @@ namespace coordsolver
             result.rmat = rmat_eigen_world;
             auto angle_axisd = Eigen::AngleAxisd(rmat_eigen_world);
             double angle = angle_axisd.angle();
-            RCLCPP_INFO(logger_, "rotate angle:%lf", angle * (180 / CV_PI));
+            // RCLCPP_INFO(logger_, "rotate angle:%lf", angle * (180 / CV_PI));
         }
         else
         {

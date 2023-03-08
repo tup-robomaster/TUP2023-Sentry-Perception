@@ -93,6 +93,7 @@ namespace armor_detector
    
             Armor armor;
             armor.id = object.cls;
+            RCLCPP_INFO(logger_, "armor id:%d",armor.id );
             armor.color = object.color;
             armor.conf = object.prob;
             if (object.color == 0)
@@ -225,6 +226,7 @@ namespace armor_detector
         else
         {
             last_armors = armors;
+            // RCLCPP_INFO(logger_, "armors id:%lf", last_armors.id);
         }
         is_target_lost = false;
         return true;

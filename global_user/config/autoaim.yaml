@@ -40,7 +40,7 @@
     # camera_name: "00J90630561" 
     camera_name: "KE0200110075" 
     camera_type: 3
-    camera_param_path: "src/armor_detector/config/camera_info.yaml"
+    camera_param_path: "src/global_user/config/camera.yaml"
 
   # Network model path.
     # network_path: "src/vehicle_system/autoaim/armor_detector/model/opt-0127-001.xml"

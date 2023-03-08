@@ -21,9 +21,12 @@ namespace armor_detector
         {
             RCLCPP_INFO(this->get_logger(), "Initializing network model...");
             detector_->armor_detector_.initModel(path_params_.network_path);
-            RCLCPP_INFO(this->get_logger(), "initmodel end...");
+            // RCLCPP_INFO(this->get_logger(), "initmodel end...");
+            // cout<<"camera_param_path:"<<path_params_.camera_param_path<<endl;
             detector_->coordsolver_.loadParam(path_params_.camera_param_path, path_params_.camera_name);
             detector_->is_init_ = true;
+            // RCLCPP_INFO(this->get_logger(), "loadparam end...");
+
         }
         RCLCPP_INFO(this->get_logger(), "Initialize network model end...");
         time_start_ = detector_->steady_clock_.now();

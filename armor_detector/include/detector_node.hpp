@@ -16,7 +16,6 @@
 //custom message
 #include "global_interface/msg/gimbal.hpp"
 #include "global_interface/msg/autoaim.hpp"
-#include "global_interface/msg/serial.hpp"
 
 using namespace global_user;
 using namespace coordsolver;
@@ -25,7 +24,6 @@ namespace armor_detector
     class DetectorNode : public rclcpp::Node
     {
         typedef global_interface::msg::Autoaim AutoaimMsg;
-        typedef global_interface::msg::Serial SerialMsg;
 
     public:
         DetectorNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
@@ -42,8 +40,6 @@ namespace armor_detector
     private:    
         // Params callback.
         bool updateParam();
-        rcl_interfaces::msg::SetParametersResult paramsCallback(const std::vector<rclcpp::Parameter>& params);
-        OnSetParametersCallbackHandle::SharedPtr callback_handle_;
         
     private:
         // Subscribe img. 
@@ -52,9 +48,7 @@ namespace armor_detector
 
         // Subscribe serial msg.
         Mutex msg_mutex_;
-        SerialMsg serial_msg_;
-        rclcpp::Subscription<SerialMsg>::SharedPtr serial_msg_sub_;
-        void sensorMsgCallback(const SerialMsg& serial_msg);
+
         
     public:
         Mutex param_mutex_;
