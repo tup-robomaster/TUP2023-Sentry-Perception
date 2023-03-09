@@ -14,7 +14,6 @@
 #include <cv_bridge/cv_bridge.h>
 
 //custom message
-#include "global_interface/msg/gimbal.hpp"
 #include "global_interface/msg/autoaim.hpp"
 
 using namespace global_user;
@@ -44,7 +43,11 @@ namespace armor_detector
     private:
         // Subscribe img. 
         std::shared_ptr<image_transport::Subscriber> img_sub_;
+        std::shared_ptr<image_transport::Subscriber> img_sub_2;
+        std::shared_ptr<image_transport::Subscriber> img_sub_3;
         void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
+        void imageCallback2(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
+        void imageCallback3(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
 
         // Subscribe serial msg.
         Mutex msg_mutex_;
@@ -60,10 +63,5 @@ namespace armor_detector
         std::unique_ptr<Detector> detector_;
         std::unique_ptr<Detector> initDetector();
 
-    protected:
-        bool using_shared_memory_;
-        SharedMemoryParam shared_memory_param_;
-        std::thread read_memory_thread_; //共享内存读线程
-        void threadCallback();
     };
 } //namespace detector

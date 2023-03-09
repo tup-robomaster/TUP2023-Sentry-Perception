@@ -43,8 +43,6 @@ namespace armor_detector
        
         rmat_imu = Eigen::Matrix3d::Identity();
 
- 
-
         time_crop = steady_clock_.now();
 
         objects.clear();
