@@ -31,24 +31,24 @@
 #include <string>
 #include <vector>
 
-#include "usb_cam/usb_cam_node.hpp"
+#include "usb_cam/usb_cam_node_2.hpp"
 #include "usb_cam/utils.hpp"
 
 
 namespace usb_cam
 {
 
-UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
-: Node("usb_cam", node_options),
-  img_(new sensor_msgs::msg::Image()),
-  image_pub_(std::make_shared<image_transport::CameraPublisher>(
-      image_transport::create_camera_publisher(this, "image",
+UsbCamNode2::UsbCamNode2(const rclcpp::NodeOptions & node_options)
+: Node("usb_cam2", node_options),
+  img_2(new sensor_msgs::msg::Image()),
+  image_pub_2(std::make_shared<image_transport::CameraPublisher>(
+      image_transport::create_camera_publisher(this, "image2",
       rclcpp::QoS {100}.get_rmw_qos_profile()))),
   service_capture_(
     this->create_service<std_srvs::srv::SetBool>(
-      "set_capture",
+      "set_capture2",
       std::bind(
-        &UsbCamNode::service_capture,
+        &UsbCamNode2::service_capture,
         this,
         std::placeholders::_1,
         std::placeholders::_2,
@@ -70,17 +70,17 @@ UsbCamNode::UsbCamNode(const rclcpp::NodeOptions & node_options)
   init();
   parameters_callback_handle_ = add_on_set_parameters_callback(
     std::bind(
-      &UsbCamNode::parametersCallback, this,
+      &UsbCamNode2::parametersCallback, this,
       std::placeholders::_1));
 }
 
-UsbCamNode::~UsbCamNode()
+UsbCamNode2::~UsbCamNode2()
 {
   RCLCPP_WARN(this->get_logger(), "shutting down");
   cam_.shutdown();
 }
 
-void UsbCamNode::service_capture(
+void UsbCamNode2::service_capture(
   const std::shared_ptr<rmw_request_id_t> request_header,
   const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
   std::shared_ptr<std_srvs::srv::SetBool::Response> response)
@@ -95,7 +95,7 @@ void UsbCamNode::service_capture(
   }
 }
 
-void UsbCamNode::init()
+void UsbCamNode2::init()
 {
   while (frame_id_ == "") {
     RCLCPP_WARN_ONCE(
@@ -110,13 +110,13 @@ void UsbCamNode::init()
   if (!cinfo_->isCalibrated()) {
     cinfo_->setCameraName(video_device_name_);
     sensor_msgs::msg::CameraInfo camera_info;
-    camera_info.header.frame_id = img_->header.frame_id;
+    camera_info.header.frame_id = img_2->header.frame_id;
     camera_info.width = image_width_;
     camera_info.height = image_height_;
     cinfo_->setCameraInfo(camera_info);
   }
 
-  img_->header.frame_id = frame_id_;
+  img_2->header.frame_id = frame_id_;
   RCLCPP_INFO(
     this->get_logger(), "Starting '%s' (%s) at %dx%d via %s (%s, %s) at %i FPS",
     camera_name_.c_str(), video_device_name_.c_str(),
@@ -165,11 +165,11 @@ void UsbCamNode::init()
   const int period_ms = 1000.0 / framerate_;
   timer_ = this->create_wall_timer(
     std::chrono::milliseconds(static_cast<int64_t>(period_ms)),
-    std::bind(&UsbCamNode::update, this));
+    std::bind(&UsbCamNode2::update, this));
   RCLCPP_INFO_STREAM(this->get_logger(), "Timer triggering every " << period_ms << " ms");
 }
 
-void UsbCamNode::get_params()
+void UsbCamNode2::get_params()
 {
   auto parameters_client = std::make_shared<rclcpp::SyncParametersClient>(this);
   auto parameters = parameters_client->get_parameters(
@@ -178,7 +178,7 @@ void UsbCamNode::get_params()
   assign_params(parameters);
 }
 
-void UsbCamNode::assign_params(const std::vector<rclcpp::Parameter> & parameters)
+void UsbCamNode2::assign_params(const std::vector<rclcpp::Parameter> & parameters)
 {
   for (auto & parameter : parameters) {
     if (parameter.get_name() == "camera_name") {
@@ -209,7 +209,7 @@ void UsbCamNode::assign_params(const std::vector<rclcpp::Parameter> & parameters
   }
 }
 
-bool UsbCamNode::take_and_send_image()
+bool UsbCamNode2::take_and_send_image()
 {
   // grab the image
   auto new_image = cam_.get_image();
@@ -218,27 +218,27 @@ bool UsbCamNode::take_and_send_image()
     return false;
   }
 
-  img_->header.stamp.sec = new_image->stamp.tv_sec;
-  img_->header.stamp.nanosec = new_image->stamp.tv_nsec;
+  img_2->header.stamp.sec = new_image->stamp.tv_sec;
+  img_2->header.stamp.nanosec = new_image->stamp.tv_nsec;
 
   // Only resize if required
-  if (img_->data.size() != static_cast<size_t>(new_image->step * new_image->height)) {
-    img_->width = new_image->width;
-    img_->height = new_image->height;
-    img_->encoding = new_image->encoding;
-    img_->step = new_image->step;
-    img_->data.resize(new_image->step * new_image->height);
+  if (img_2->data.size() != static_cast<size_t>(new_image->step * new_image->height)) {
+    img_2->width = new_image->width;
+    img_2->height = new_image->height;
+    img_2->encoding = new_image->encoding;
+    img_2->step = new_image->step;
+    img_2->data.resize(new_image->step * new_image->height);
   }
   // Fill in image data
-  memcpy(&img_->data[0], new_image->image, img_->data.size());
+  memcpy(&img_2->data[0], new_image->image, img_2->data.size());
 
   auto ci = std::make_unique<sensor_msgs::msg::CameraInfo>(cinfo_->getCameraInfo());
-  ci->header = img_->header;
-  image_pub_->publish(*img_, *ci);
+  ci->header = img_2->header;
+  image_pub_2->publish(*img_2, *ci);
   return true;
 }
 
-rcl_interfaces::msg::SetParametersResult UsbCamNode::parametersCallback(
+rcl_interfaces::msg::SetParametersResult UsbCamNode2::parametersCallback(
   const std::vector<rclcpp::Parameter> & parameters)
 {
   RCLCPP_DEBUG(get_logger(), "Setting parameters for %s", camera_name_.c_str());
@@ -252,7 +252,7 @@ rcl_interfaces::msg::SetParametersResult UsbCamNode::parametersCallback(
   return result;
 }
 
-void UsbCamNode::update()
+void UsbCamNode2::update()
 {
   if (cam_.is_capturing()) {
     // If the camera exposure longer higher than the framerate period
@@ -269,4 +269,4 @@ void UsbCamNode::update()
 
 
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(usb_cam::UsbCamNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(usb_cam::UsbCamNode2)

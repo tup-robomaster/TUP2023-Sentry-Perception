@@ -53,15 +53,29 @@ ament_export_libraries(${PROJECT_NAME})
 ## Declare a ROS 2 composible node as a library
 ament_auto_add_library(${PROJECT_NAME}_node SHARED
   src/usb_cam_node.cpp
+  # src/usb_cam_node_2.cpp
+)
+ament_auto_add_library(${PROJECT_NAME}_node_2 SHARED
+  # src/usb_cam_node.cpp
+  src/usb_cam_node_2.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}_node
   ${PROJECT_NAME})
+target_link_libraries(${PROJECT_NAME}_node_2
+  ${PROJECT_NAME})
+
 
 ## Use node to generate an executable
 rclcpp_components_register_node(${PROJECT_NAME}_node
   PLUGIN "usb_cam::UsbCamNode"
+  # PLUGIN "usb_cam::UsbCamNode2"
   EXECUTABLE ${PROJECT_NAME}_node_exe
+)
+rclcpp_components_register_node(${PROJECT_NAME}_node_2
+  # PLUGIN "usb_cam::UsbCamNode"
+  PLUGIN "usb_cam::UsbCamNode2"
+  EXECUTABLE ${PROJECT_NAME}_node2_exe
 )
 
 if(BUILD_TESTING)
@@ -84,11 +98,13 @@ endif()
 
 install(
   PROGRAMS scripts/show_image.py
+  PROGRAMS scripts/show_image2.py
   DESTINATION lib/${PROJECT_NAME})
 
 install(TARGETS
   ${PROJECT_NAME}
   ${PROJECT_NAME}_node
+  ${PROJECT_NAME}_node_2
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib

@@ -53,7 +53,7 @@ def generate_launch_description():
     print()
     # get path to params file
     params_path = os.path.join(
-        usb_cam_dir,
+        usb_cam_dir,armor_detector
         'config',
         'params.yaml'
     )

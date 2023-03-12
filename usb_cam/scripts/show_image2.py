@@ -40,12 +40,12 @@ from sensor_msgs.msg import Image
 class ExamineImage(Node):
 
     def __init__(self):
-        super().__init__('examine_image')
+        super().__init__('examine_image2')
 
         self.mat = None
         self.sub = self.create_subscription(
             Image,
-            'image',
+            'image2',
             self.image_callback,
             100)
 
@@ -75,7 +75,7 @@ class ExamineImage(Node):
             print('unsupported encoding {}'.format(msg.encoding))
             return
         if self.mat is not None:
-            cv2.imshow('image', self.mat)
+            cv2.imshow('image2', self.mat)
             cv2.waitKey(5)
 
 
