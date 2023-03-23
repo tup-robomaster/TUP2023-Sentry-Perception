@@ -29,6 +29,8 @@ namespace armor_detector
         ~DetectorNode();
         
         void detect(TaskData& src);
+        // void RobotMatch(const int camera_id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
+
     private:
         rclcpp::Time time_start_;
         ImageInfo image_info_;

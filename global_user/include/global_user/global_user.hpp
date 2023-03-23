@@ -65,11 +65,11 @@ namespace global_user
         ImageInfo()
         {
             camera_topic_map = 
-            {
+            {                                                                        
                 {0, "image_raw0"},
-                {1, "image_raw"},
-                {2, "image_raw2"},
-                {3, "image_raw3"}
+                {1, "image"},
+                {2, "image2"},
+                {3, "image3"}
             };
 
             image_size_map[0].width = DAHENG_IMAGE_WIDTH;

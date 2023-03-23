@@ -50,11 +50,6 @@ namespace armor_detector
         
         if(!armor_detector_.detect(input, objects))
         {   //若未检测到目标
-            if(debug_params_.show_aim_cross)
-            {
-                line(src.img, Point2f(src.img.size().width / 2, 0), Point2f(src.img.size().width / 2, src.img.size().height), {0,255,0}, 1);
-                line(src.img, Point2f(0, src.img.size().height / 2), Point2f(src.img.size().width, src.img.size().height / 2), {0,255,0}, 1);
-            }
 
             is_target_lost = true;
             lost_cnt++;
@@ -91,7 +86,7 @@ namespace armor_detector
    
             Armor armor;
             armor.id = object.cls;
-            RCLCPP_INFO(logger_, "armor id:%d",armor.id );
+            // RCLCPP_INFO(logger_, "armor id:%d",armor.id );
             armor.color = object.color;
             armor.conf = object.prob;
             if (object.color == 0)
@@ -203,17 +198,18 @@ namespace armor_detector
         if (armors.empty())
         {
             RCLCPP_WARN_THROTTLE(logger_, this->steady_clock_, 500, "No suitable targets...");
-            if(debug_params_.show_aim_cross)
-            {
-                line(src.img, Point2f(src.img.size().width / 2, 0), Point2f(src.img.size().width / 2, src.img.size().height), Scalar(0,255,0), 1);
-                line(src.img, Point2f(0, src.img.size().height / 2), Point2f(src.img.size().width, src.img.size().height / 2), Scalar(0,255,0), 1);
-            }
+            // if(debug_params_.show_aim_cross)
+            // {
+                // line(src.img, Point2f(src.img.size().width / 2, 0), Point2f(src.img.size().width / 2, src.img.size().height), Scalar(0,255,0), 1);
+                // line(src.img, Point2f(0, src.img.size().height / 2), Point2f(src.img.size().width, src.img.size().height / 2), Scalar(0,255,0), 1);
+            // }
 
-            if(debug_params_.show_all_armors)
-            {
-                RCLCPP_DEBUG_ONCE(logger_, "Show all armors...");
-                showArmors(src);
-            }
+            // if(debug_params_.show_all_armors)
+            // {
+            //     RCLCPP_DEBUG_ONCE(logger_, "Show all armors...");
+            //     // RCLCPP_INFO(logger_, "=========================");
+            //     showArmors(src);
+            // }
 
             is_target_lost = true;
             lost_cnt++;
@@ -223,8 +219,21 @@ namespace armor_detector
         }
         else
         {
+            last_armors.clear();
             last_armors = armors;
-            // RCLCPP_INFO(logger_, "armors id:%lf", last_armors.id);
+            for(int i = 0; i < armors.size(); i++)
+            {
+            RCLCPP_INFO(logger_, "armor id:%d",last_armors[i].id );
+            }
+            robot_detect(src);
+            cout<<"final_robot:"<<final_robot_results.size()<<endl;
+           if(debug_params_.show_all_armors)
+            {
+                RCLCPP_DEBUG_ONCE(logger_, "Show all armors...");
+                // RCLCPP_INFO(logger_, "=========================");
+                showArmors(src);
+            } 
+            
         }
         is_target_lost = false;
         return true;
@@ -238,8 +247,10 @@ namespace armor_detector
      */
     void Detector::showArmors(TaskData& src)
     {
+        // RCLCPP_INFO(logger_, "=========================");
         for (auto armor : armors)
         {
+            // RCLCPP_INFO(logger_, "=========================");
             char ch[10];
             sprintf(ch, "%.3f", armor.conf);
             std::string conf_str = ch;
@@ -255,11 +266,287 @@ namespace armor_detector
             if (armor.color == 3)
                 putText(src.img, "P" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 100, 255}, 2);
             for(int i = 0; i < 4; i++)
+            {
                 line(src.img, armor.apex2d[i % 4], armor.apex2d[(i + 1) % 4], {0,255,0}, 1);
-            rectangle(src.img, armor.roi, {255, 0, 255}, 1);
-            auto armor_center = coordsolver_.reproject(armor.armor3d_cam);
-            circle(src.img, armor_center, 4, {0, 0, 255}, 2);
-        }
-    }
+                // cout << "armor3d_world: " << armor.armor3d_world << endl;
+                // cout << "armor3d_cam: " << armor.armor3d_cam << endl;
+                // cout << "rect: " << armor.rect << endl;
+                cout << "armor.apex2d: " << armor.apex2d << endl;
+                // cout << "armor.roi: " << armor.roi << endl;
+                // cout << "armor.type: " << armor.type<< endl;
 
+
+            }
+            rectangle(src.img, armor.roi, {255, 0, 255}, 1);
+            // auto armor_center = coordsolver_.reproject(armor.armor3d_cam);
+            // circle(src.img, armor_center, 4, {0, 0, 255}, 2);
+        }
+        // for (auto car : final_robot_results)
+        // {
+        //     // RCLCPP_INFO(logger_, "=========================");
+        //     rectangle(src.img, car.m_rect, {255, 0, 255}, 1);
+        // }
+    }
+    // void Detector::showCar(TaskData& src)
+    // {
+    //     // RCLCPP_INFO(logger_, "=========================");
+    //     for (auto car : final_robot_results)
+    //     {
+    //         // RCLCPP_INFO(logger_, "=========================");
+    //         rectangle(src.img, car.m_rect, {255, 0, 255}, 1);
+    //     }
+    // }
+    // void load_camera_params(const std::vector<std::vector<double>> intrinsics,
+    //                                        const std::vector<std::vector<double>> extrinsics,
+    //                                        const std::vector<std::vector<double>> discoeffs)
+    // {
+    //     for (int i = 0; i < intrinsics.size(); i++)
+    //     {
+    //         cv::Mat intrinsic_temp = cv::Mat(3, 3, CV_64FC1);
+    //         memcpy(intrinsic_temp.data, intrinsics[i].data(), intrinsics[i].size() * sizeof(double));
+    //         _intrinsic_cvs.push_back(intrinsic_temp);
+    //     }
+    //     for (int i = 0; i < extrinsics.size(); i++)
+    //     {
+    //         cv::Mat extrinsic_temp = cv::Mat(4, 4, CV_64FC1);
+    //         memcpy(extrinsic_temp.data, extrinsics[i].data(), extrinsics[i].size() * sizeof(double));
+    //         _extrinsic_cvs.push_back(extrinsic_temp);
+    //     }
+    //     for (int i = 0; i < discoeffs.size(); i++)
+    //     {
+    //         _discoff_cvs.push_back(cv::Mat(discoeffs[i]).t());
+    //     }
+    // }
+    // void location_estimation(const int id, std::vector<Robot> &Robots, bool is_robot_from_armors)
+    // {
+
+    //     for (int i = 0; i < Robots.size(); ++i)
+    //     {
+    //         float fx = _intrinsic_cvs[id].at<double>(0, 0);
+    //         float fy = _intrinsic_cvs[id].at<double>(1, 1);
+    //         float cx = _intrinsic_cvs[id].at<double>(0, 2);
+    //         float cy = _intrinsic_cvs[id].at<double>(1, 2);
+    //         float center_u = Robots[i].m_rect.x + Robots[i].m_rect.width / 2;
+    //         float center_v = Robots[i].m_rect.y + Robots[i].m_rect.height / 2;
+
+    //         if (!is_robot_from_armors)
+    //         {
+    //             Robots[i].XYZ_camera.z;
+    //         }
+    //         else
+    //         {
+    //             Robots[i].XYZ_camera.z = 0.35;
+    //         }
+    //         Robots[i].XYZ_camera.x = (center_u - cx) * Robots[i].XYZ_camera.z / fx;
+    //         Robots[i].XYZ_camera.y = (center_v - cy) * Robots[i].XYZ_camera.z / fy;
+
+    //         Eigen::Matrix4f extrinsic_temp;
+    //         cv::cv2eigen(_extrinsic_cvs[id], extrinsic_temp);
+    //         Eigen::Vector3f P_camera;
+    //         P_camera << Robots[i].XYZ_camera.x, Robots[i].XYZ_camera.y, Robots[i].XYZ_camera.z;
+    //         Eigen::Matrix3f Rbc = extrinsic_temp.topLeftCorner(3, 3).inverse();
+    //         Eigen::Vector3f tbc = -Rbc * extrinsic_temp.topRightCorner(3, 1);
+    //         Eigen::Vector3f P_body = Rbc * P_camera + tbc;
+    //         Robots[i].XYZ_world.x = P_body[0];
+    //         Robots[i].XYZ_world.y = P_body[1];
+    //         Robots[i].XYZ_world.z = 0;
+    //         //std::cout<<"In Camera "<< id << " Find "<< "Robot "<< Robots[i].m_id <<" x: "<< Robots[i].XYZ_world.x << " y: "<< Robots[i].XYZ_world.y << " z: "<< Robots[i].XYZ_world.z <<std::endl;
+    //     }
+    // }
+
+
+    void Detector::RobotMatch(const int id, const std::vector<Armor> &results, std::vector<Robot> &Robots)
+    {
+        std::vector<Armor> last;
+        // std::vector<Robot> Robots;
+        bool flag = false;
+        int numarmor = 0;
+        std::vector<int> repeat_index;
+        for (int i = 0; i < results.size(); i++)
+        {
+            // RCLCPP_INFO(logger_, "111111111111111111111111");
+            for(int j = i + 1; j < results.size(); j++)
+            {
+                // RCLCPP_INFO(logger_, "2222222222222222222222222");
+                if(results[i].id == results[j].id)
+                {
+                    float dis = sqrt(pow((results[i].armor3d_world[0] - results[j].armor3d_world[0]),2)+
+                            pow((results[i].armor3d_world[1] - results[j].armor3d_world[1]),2));
+                    if(dis < 0.5)
+                    {
+                        // RCLCPP_INFO(logger_, "333333333333333333333333333");
+                        flag = true;
+                        repeat_index.push_back(i);
+                        // Robot robot_temp = results[j];
+                        
+                        int k = numarmor;
+                        Robots[k].m_id = results[i].id;
+                        Robots[k].m_color = results[i].color;
+                        Robots[k].m_rect.x = results[i].roi.x;
+                        Robots[k].m_rect.y = results[i].roi.y;
+                        Robots[k].XYZ_world[0] = (results[i].armor3d_world[0] + results[j].armor3d_world[1])/2;
+                        Robots[k].XYZ_world[1] = (results[i].armor3d_world[1] + results[j].armor3d_world[1])/2;
+                        Robots[k].m_rect.x = min(results[i].roi.x, results[j].roi.x);
+                        Robots[k].m_rect.y = min(results[i].roi.y, results[j].roi.y);
+                        Robots[k].m_number = min(results[i].conf, results[j].conf);
+                        if(results[i].roi.x <= results[j].roi.x)
+                            Robots[k].m_rect.width = results[j].roi.x + results[j].roi.width - results[i].roi.x ;
+                        else
+                            Robots[k].m_rect.width = results[i].roi.x + results[i].roi.width - results[j].roi.x ;
+                        if(results[i].roi.y <= results[j].roi.y)
+                            Robots[k].m_rect.height = results[j].roi.y + results[j].roi.height - results[i].roi.y ;
+                        else
+                            Robots[k].m_rect.height = results[i].roi.y + results[i].roi.height - results[j].roi.y ;
+
+                        numarmor++;
+                        robot_results.push_back(Robots[k]);
+                        continue;
+                    }
+                }
+            }
+        }
+        // //split Robot and Armor
+        // std::vector<Armor> last;
+        // for (int i = 0; i < results.size(); ++i)
+        // {
+        //     if (results[i].id == 0)
+        //     {
+        //         Robot Robot_item;
+        //         Robot_item.m_rect = results[i].roi;
+        //         Robots.push_back(Robot_item);
+        //     }
+        //     else
+        //     {
+        //         last.push_back(results[i]);
+        //     }
+        // }
+
+        // std::vector<int> matched_armor_indexes;
+
+        // for(int i = 0; i <Robots.size(); i++)
+        // {
+        //     for(int j = 0;j < last.size(); j++)
+        //     {
+        //         if(last[j].roi.x >= Robots[i].m_rect.x &&
+        //             last[j].roi.y > Robots[i].m_rect.y &&
+        //             (last[j].roi.width + last[j].roi.x) <= (Robots[i].m_rect.width + Robots[i].m_rect.x) &&
+        //             (last[j].roi.height + last[j].roi.y) <= (Robots[i].m_rect.height + Robots[i].m_rect.y) &&
+        //             (last[j].roi.y + last[j].roi.height / 2) > (Robots[i].m_rect.y + Robots[i].m_rect.height / 2))
+        //             {
+        //                 Robots[i].m_armornums += 1;
+        //                 Robots[i].m_color = last[j].color;
+        //                 Robots[i].m_id = last[j].id;
+
+        //                 matched_armor_indexes.push_back(j);
+        //             }
+        //         else
+        //         {
+        //             Robots[i].m_id = 0;
+        //         }
+        //     }
+            
+        // }
+        // std::vector<Armor> unmatch_armors;
+        // for(int i = 0; i < last.size(); i ++)
+        // {
+        //     std::vector<int>::iterator it = std::find(matched_armor_indexes.begin(), matched_armor_indexes.end(), i);
+        //     if (it == matched_armor_indexes.end())
+        //     {
+        //         unmatch_armors.push_back(last[i]);
+        //     }
+        // }
+        // std::vector<Robot> robots_by_armors;
+        // for (int i = 0; i < unmatch_armors.size(); i++)
+        // {
+        //     //The distance is too close, and only the armor is detected
+        //     if (unmatch_armors[i].roi.height > 150 || unmatch_armors[i].roi.height * unmatch_armors[i].roi.width > 30000)
+        //     {
+        //         Robot Robot_item;
+        //         Robot_item.m_rect = unmatch_armors[i].roi;
+        //         Robot_item.m_id = unmatch_armors[i].id;
+        //         robots_by_armors.push_back(Robot_item);
+        //     }
+        // }
+        // Robots.insert(Robots.end(), robots_by_armors.begin(), robots_by_armors.end());
+    
+    }
+    void Detector::robot_detect(TaskData& src)
+    {
+        std::vector<std::vector<Armor>> detected_objects;
+        // std::vector<Robot> robot_result;
+        // std::vector<Robot> final_robot_results;
+        detected_objects.clear();
+        detected_objects.push_back(armors);
+    //    if(sync_packages(Measures, detected_objects))
+    //    {
+            for(int i = 0 ; i < detected_objects.size(); i++)
+            {
+                // RCLCPP_INFO(this->get_logger(), "---------------------------");
+                
+                std::vector<Armor> obj = detected_objects[i];
+                std::vector<Robot> robots_temp;
+                RobotMatch(i,obj,robots_temp); 
+                for(int j = 0; j < robot_results.size();j++)
+                {
+                    if(robot_results[j].m_id != 0)
+                    {
+                        final_robot_results.push_back(robot_results[j]);
+                    }
+                }
+            }
+        if (final_robot_results.empty())
+        {
+            RCLCPP_WARN_THROTTLE(logger_, this->steady_clock_, 500, "No detect car ...");
+            // return false;
+        }
+        else
+        {
+            final_robot_results.clear();
+            final_robot_results = robot_results;
+
+        }
+            // std::vector<int> repeat_index;
+            // for(int k = 0;k < robot_results.size();k++){
+            //     std::vector<int>::iterator it = std::find(repeat_index.begin(), repeat_index.end(), k);
+            //     if (it != repeat_index.end())
+            //         continue;
+            //     bool flag = false;
+                // for(int s = k + 1; s < robot_results.size();k++)
+                // {
+                //     if(robot_results[k].m_id == robot_results[s].m_id)
+                //     {
+                //         float dis = sqrt(pow((robot_results[k].XYZ_world.x - robot_results[s].XYZ_world.x),2)+
+                //             pow((robot_results[k].XYZ_world.y - robot_results[s].XYZ_world.y),2));
+                //         if(dis < 0.5)
+                //         {
+                //             flag = true;
+                //             repeat_index.push_back(s);
+                //             Robot robot_temp = robot_results[k];
+                //             robot_temp.XYZ_world.x = (robot_results[k].XYZ_world.x + robot_results[s].XYZ_world.x)/2;
+                //             robot_temp.XYZ_world.y = (robot_results[k].XYZ_world.y + robot_results[s].XYZ_world.y)/2;
+                //             final_robot_results.push_back(robot_temp);
+                //             continue;
+                //         }
+                //     }
+                // }
+            //     if(!flag)
+            //     {
+            //         final_robot_results.push_back(robot_results[k]);
+            //     }
+            // }
+    //    }     
+    // for (int i = 0; i < final_robot_results.size(); ++i)
+    // {
+    //     int x_around = -final_robot_results[i].XYZ_world.y * 100 + 300;
+    //     int y_around = -final_robot_results[i].XYZ_world.x * 100 + 400;
+        
+    // // cv::imshow("around", src);
+    // // cv::waitKey(1);  
+    // // cv::namedWindow("around", cv::WINDOW_AUTOSIZE);
+    // // cv::imshow("around", src.img);
+    // // cv::waitKey(1);
+    // // for (int i = 0; i < 4; i++)
+    // //     cv::line(src.img, vertex[i], vertex[(i + 1) % 4], cv::Scalar(0, 255, 0), 2);
+    // }
+    }
 }

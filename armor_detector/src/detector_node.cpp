@@ -3,11 +3,13 @@
 using namespace std::placeholders;
 namespace armor_detector
 {
+
     DetectorNode::DetectorNode(const rclcpp::NodeOptions& options)
     : Node("armor_detector", options)
     {
         RCLCPP_WARN(this->get_logger(), "Starting detector node...");
 
+        // 问题：try-catch块中的代码可能会抛出异常，如果抛出异常，将会导致detector_指针为空，可能会导致程序崩溃。
         try
         {   //detector类初始化
             this->detector_ = initDetector();
@@ -21,17 +23,15 @@ namespace armor_detector
         {
             RCLCPP_INFO(this->get_logger(), "Initializing network model...");
             detector_->armor_detector_.initModel(path_params_.network_path);
-            // RCLCPP_INFO(this->get_logger(), "initmodel end...");
-            // cout<<"camera_param_path:"<<path_params_.camera_param_path<<endl;
             detector_->coordsolver_.loadParam(path_params_.camera_param_path, path_params_.camera_name);
             detector_->is_init_ = true;
-            // RCLCPP_INFO(this->get_logger(), "loadparam end...");
 
         }
         RCLCPP_INFO(this->get_logger(), "Initialize network model end...");
         time_start_ = detector_->steady_clock_.now();
 
         //QoS    
+
         rclcpp::QoS qos(0);
         qos.keep_last(5);
         qos.best_effort();
@@ -59,7 +59,56 @@ namespace armor_detector
             img_sub_ = std::make_shared<image_transport::Subscriber>(image_transport::create_subscription(this, camera_topic,
                 std::bind(&DetectorNode::imageCallback, this, _1), transport_type));
         }
-        
+
+    //    std::vector<std::vector<Armor>> detected_objects;
+    //    std::vector<Robot> robot_result;
+    //    std::vector<Robot> final_robot_results;
+
+    // //    if(sync_packages(Measures, detected_objects))
+    // //    {
+    //         for(int i = 0 ; i < detected_objects.size(); i++)
+    //         {
+    //             std::vector<Armor> obj = detected_objects[i];
+    //             std::vector<Robot> robots_temp;
+    //             detector_->RobotMatch(i,obj,robots_temp); 
+    //             for(int j = 0; j < robots_temp.size();j++)
+    //             {
+    //                 if(robots_temp[j].m_id != 0)
+    //                 {
+    //                     robot_result.push_back(robots_temp[j]);
+    //                 }
+    //             }
+    //         }
+    //         std::vector<int> repeat_index;
+    //         for(int k = 0;k < robot_result.size();k++){
+    //             std::vector<int>::iterator it = std::find(repeat_index.begin(), repeat_index.end(), k);
+    //             if (it != repeat_index.end())
+    //                 continue;
+    //             bool flag = false;
+    //             for(int s = k + 1; s < robot_result.size();k++)
+    //             {
+    //                 if(robot_result[k].m_id == robot_result[s].m_id)
+    //                 {
+    //                     float dis = sqrt(pow((robot_result[k].XYZ_world.x - robot_result[s].XYZ_world.x),2)+
+    //                         pow((robot_result[k].XYZ_world.y - robot_result[s].XYZ_world.y),2));
+    //                     if(dis < 0.5)
+    //                     {
+    //                         flag = true;
+    //                         repeat_index.push_back(s);
+    //                         Robot robot_temp = robot_result[k];
+    //                         robot_temp.XYZ_world.x = (robot_result[k].XYZ_world.x + robot_result[s].XYZ_world.x)/2;
+    //                         robot_temp.XYZ_world.y = (robot_result[k].XYZ_world.y + robot_result[s].XYZ_world.y)/2;
+    //                         final_robot_results.push_back(robot_temp);
+    //                         continue;
+    //                     }
+    //                 }
+    //             }
+    //             if(!flag)
+    //             {
+    //                 final_robot_results.push_back(robot_result[k]);
+    //             }
+    //         }
+    // //    }
     }
 
     DetectorNode::~DetectorNode()
@@ -67,11 +116,61 @@ namespace armor_detector
        
     }
 
+    // 用于存储测量组的数据，包括三个图像的时间和三个相机检测到的装甲板信息。
+    struct MeasureGroup
+    {
+        double img1_time;
+        double img2_time;
+        double img3_time;
+
+        std::vector<Armor> cam1_objects;
+        std::vector<Armor> cam2_objects;
+        std::vector<Armor> cam3_objects;
+    };
+    MeasureGroup Measures;
+
+    // bool sync_packages(MeasureGroup meas, std::vector<std::vector<Armor>> &detected_objects)
+    // {
+    //     std::vector<std::vector<Armor>> detected_objects_temp;
+    //     detected_objects_temp.push_back(meas.cam1_objects);
+    //     detected_objects_temp.push_back(meas.cam2_objects);
+    //     detected_objects_temp.push_back(meas.cam3_objects);
+
+    //     std::vector<double> src_times;
+    //     src_times.push_back(meas.img1_time);
+    //     src_times.push_back(meas.img2_time);
+    //     src_times.push_back(meas.img3_time);
+
+    //     bool syncFlag = false;
+
+    //     for (int i = 0; i < src_times.size(); i++)
+    //     {
+    //         if (src_times[i] != 0 && () < 0.5)
+    //         {
+    //             detected_objects.push_back(detected_objects_temp[i]);
+    //             syncFlag = true;
+    //         }
+    //         else
+    //         {
+    //             std::vector<Armor> emptyObject;            
+    //             detected_objects.push_back(emptyObject);
+    //             // RCLCPP_WARN(this->get_logger(), "Camera [%d] get image failed ..",i + 1);
+    //         }
+    //     }
+    //     if (!syncFlag)
+    //     {
+    //         // RCLCPP_WARN(this->get_logger(), "image failed ..");
+    //     }
+    //     return syncFlag;
+    // }
+
+
+
     void DetectorNode::detect(TaskData& src)
     {
         auto img_sub_time = detector_->steady_clock_.now();
         src.timestamp = (img_sub_time - time_start_).nanoseconds();
-        
+        std::vector<Armor> armors;
         AutoaimMsg target_info;
         bool is_target_lost = true;
         param_mutex_.lock();
@@ -84,7 +183,7 @@ namespace armor_detector
         target_info.is_target_lost = is_target_lost;
         
         // Publish target's information containing 3d point and timestamp.
-        armor_info_pub_->publish(std::move(target_info));
+        armor_info_pub_->publish(std::move(target_info));      
         
     }
 
@@ -115,6 +214,7 @@ namespace armor_detector
             cv::imshow("dst", src.img);
             cv::waitKey(1);
         }
+        
     }
     void DetectorNode::imageCallback2(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
     {

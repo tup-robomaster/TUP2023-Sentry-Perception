@@ -71,5 +71,5 @@
     using_shared_memory: false
     show_transformed_info: false
     auto_label: false
-    show_all_armors: false
+    show_all_armors: true
 
