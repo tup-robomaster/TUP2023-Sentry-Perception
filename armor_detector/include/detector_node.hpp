@@ -29,6 +29,9 @@ namespace armor_detector
         ~DetectorNode();
         
         void detect(TaskData& src);
+        void RobotMatch(int id, std::vector<Armor> &results, std::vector<Robot> &Robots);
+        void robot_detect(TaskData& src, std::vector<Armor> &armors);
+        // void PublishDetectRobots(rclcpp::Publisher robot_detector_pub, std::vector<Robot> robot_results);
         // void RobotMatch(const int camera_id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
 
     private:
@@ -56,6 +59,10 @@ namespace armor_detector
 
         
     public:
+    
+        std::vector<Robot> robot_results;
+        std::vector<Robot> final_robot_results;
+
         Mutex param_mutex_;
         DetectorParam detector_params_;
         // GyroParam gyro_params_;

@@ -59,56 +59,6 @@ namespace armor_detector
             img_sub_ = std::make_shared<image_transport::Subscriber>(image_transport::create_subscription(this, camera_topic,
                 std::bind(&DetectorNode::imageCallback, this, _1), transport_type));
         }
-
-    //    std::vector<std::vector<Armor>> detected_objects;
-    //    std::vector<Robot> robot_result;
-    //    std::vector<Robot> final_robot_results;
-
-    // //    if(sync_packages(Measures, detected_objects))
-    // //    {
-    //         for(int i = 0 ; i < detected_objects.size(); i++)
-    //         {
-    //             std::vector<Armor> obj = detected_objects[i];
-    //             std::vector<Robot> robots_temp;
-    //             detector_->RobotMatch(i,obj,robots_temp); 
-    //             for(int j = 0; j < robots_temp.size();j++)
-    //             {
-    //                 if(robots_temp[j].m_id != 0)
-    //                 {
-    //                     robot_result.push_back(robots_temp[j]);
-    //                 }
-    //             }
-    //         }
-    //         std::vector<int> repeat_index;
-    //         for(int k = 0;k < robot_result.size();k++){
-    //             std::vector<int>::iterator it = std::find(repeat_index.begin(), repeat_index.end(), k);
-    //             if (it != repeat_index.end())
-    //                 continue;
-    //             bool flag = false;
-    //             for(int s = k + 1; s < robot_result.size();k++)
-    //             {
-    //                 if(robot_result[k].m_id == robot_result[s].m_id)
-    //                 {
-    //                     float dis = sqrt(pow((robot_result[k].XYZ_world.x - robot_result[s].XYZ_world.x),2)+
-    //                         pow((robot_result[k].XYZ_world.y - robot_result[s].XYZ_world.y),2));
-    //                     if(dis < 0.5)
-    //                     {
-    //                         flag = true;
-    //                         repeat_index.push_back(s);
-    //                         Robot robot_temp = robot_result[k];
-    //                         robot_temp.XYZ_world.x = (robot_result[k].XYZ_world.x + robot_result[s].XYZ_world.x)/2;
-    //                         robot_temp.XYZ_world.y = (robot_result[k].XYZ_world.y + robot_result[s].XYZ_world.y)/2;
-    //                         final_robot_results.push_back(robot_temp);
-    //                         continue;
-    //                     }
-    //                 }
-    //             }
-    //             if(!flag)
-    //             {
-    //                 final_robot_results.push_back(robot_result[k]);
-    //             }
-    //         }
-    // //    }
     }
 
     DetectorNode::~DetectorNode()
@@ -163,6 +113,117 @@ namespace armor_detector
     //     }
     //     return syncFlag;
     // }
+    // void DetectorNode::PublishDetectRobots(rclcpp::Publisher robot_detector_pub, std::vector<Robot> robot_results)
+    // {
+    //     robot_msgs::RobotLocation robots_temp;
+    //     robot_msgs::GlobalMap submap_msg;
+    //     submap_msg.header.stamp = ros::Time::now();
+
+    //     for (int i = 0; i < robot_results.size(); ++i)
+    //     {
+    //         robots_temp.id = robot_results[i].m_id;
+    //         robots_temp.x = robot_results[i].XYZ_body.x;
+    //         robots_temp.y = robot_results[i].XYZ_body.y;
+    //         robots_temp.yaw = 0;
+    //         submap_msg.robots.push_back(robots_temp);
+    //     }
+
+    //     robot_detector_pub.publish(submap_msg);
+    // }
+    void DetectorNode::RobotMatch(int id, std::vector<Armor> &results, std::vector<Robot> &Robots)
+    {
+        std::vector<Armor> last;
+
+        int numarmor = 0;
+        std::vector<int> repeat_index;
+        for (int i = 0; i < results.size(); i++)
+        {
+            Robot robot_temp ;
+            bool flag = false;
+            for(int j = i + 1; j < results.size(); j++)
+            {
+                if(results[i].id == results[j].id)
+                {
+                    float dis = sqrt(pow((results[i].armor3d_world[0] - results[j].armor3d_world[0]),2)+
+                            pow((results[i].armor3d_world[1] - results[j].armor3d_world[1]),2));
+                    if(dis < 0.5)
+                    {
+                        flag = true;
+                        // repeat_index.push_back(i);
+                        
+                        robot_temp.m_id = results[i].id;
+                        robot_temp.m_color = results[i].color;
+                        robot_temp.m_rect.x = results[i].roi.x;
+                        robot_temp.m_rect.y = results[i].roi.y;
+                        robot_temp.XYZ_world[0] = (results[i].armor3d_world[0] + results[j].armor3d_world[1])/2;
+                        robot_temp.XYZ_world[1] = (results[i].armor3d_world[1] + results[j].armor3d_world[1])/2;
+                        robot_temp.m_rect.x = min(results[i].roi.x, results[j].roi.x);
+                        robot_temp.m_rect.y = min(results[i].roi.y, results[j].roi.y);
+                        robot_temp.m_number = min(results[i].conf, results[j].conf);
+                        if(results[i].roi.x <= results[j].roi.x)
+                            robot_temp.m_rect.width = results[j].roi.x + results[j].roi.width - results[i].roi.x ;
+                        else
+                            robot_temp.m_rect.width = results[i].roi.x + results[i].roi.width - results[j].roi.x ;
+                        if(results[i].roi.y <= results[j].roi.y)
+                            robot_temp.m_rect.height = results[j].roi.y + results[j].roi.height - results[i].roi.y ;
+                        else
+                            robot_temp.m_rect.height = results[i].roi.y + results[i].roi.height - results[j].roi.y ;
+                        robot_results.push_back(robot_temp);
+                        continue;
+                    }
+                }
+            }
+            if(!flag)
+            {
+                robot_temp.m_id = results[i].id;
+                cout<<"armor:"<<robot_temp.m_id<<endl;
+                robot_temp.m_color = results[i].color;
+                robot_temp.m_number = results[i].conf;
+                robot_temp.m_rect = results[i].roi;
+                robot_temp.XYZ_world = results[i].armor3d_world;
+                robot_temp.XYZ_camera = results[i].armor3d_cam;
+                robot_results.push_back(robot_temp);
+            }
+        }
+    }
+    void DetectorNode::robot_detect(TaskData& src, std::vector<Armor> &armors)
+    {
+        std::vector<std::vector<Armor>> detected_objects;
+        // std::vector<Robot> robot_result;
+        // std::vector<Robot> final_robot_results;
+        detected_objects.clear();
+        detected_objects.push_back(armors);
+
+        for(int i = 0 ; i < detected_objects.size(); i++)
+        {
+            // RCLCPP_INFO(this->get_logger(), "---------------------------");
+            
+            std::vector<Armor> obj = detected_objects[i];
+            std::vector<Robot> robots;
+            RobotMatch(i,obj,robots); 
+            if(robot_results.empty())
+            {
+                RCLCPP_INFO(this->get_logger(), "No Detect Robot...");
+            }
+            for(int j = 0; j < robot_results.size();j++)
+            {
+                if(robot_results[j].m_id != 0)
+                {
+                    final_robot_results.push_back(robot_results[j]);
+                }
+            }
+        }
+        if (final_robot_results.empty())
+        {
+            RCLCPP_INFO(this->get_logger(), "No Detect Final_Robot...");
+        }
+        else
+        {
+            final_robot_results.clear();
+            final_robot_results = robot_results;
+
+        }
+    }
 
 
 
@@ -171,17 +232,19 @@ namespace armor_detector
         auto img_sub_time = detector_->steady_clock_.now();
         src.timestamp = (img_sub_time - time_start_).nanoseconds();
         std::vector<Armor> armors;
+        
         AutoaimMsg target_info;
         bool is_target_lost = true;
         param_mutex_.lock();
-        if(detector_->armor_detect(src, is_target_lost))
+        if(detector_->armor_detect(src, is_target_lost, armors))
         {   
             RCLCPP_INFO(this->get_logger(), "armors detector...");
 
         }
         param_mutex_.lock();
-        target_info.is_target_lost = is_target_lost;
-        
+        // target_info.is_target_lost = is_target_lost;
+        robot_detect(src, armors);
+      
         // Publish target's information containing 3d point and timestamp.
         armor_info_pub_->publish(std::move(target_info));      
         

@@ -38,26 +38,26 @@ namespace armor_detector
         cv::Point2d center2d;
         TargetType type;
     };
-    struct Robot
+    struct Robot 
     {
         cv::Rect m_rect;
         int m_number;
         int m_color;
         // int m_armornums;
-        int m_id; //1-red1 2-red2 3-blue1 4-blue2 5-grey 0-unknown
+        int m_id; 
         // cv::Point3f XYZ_camera;
         // cv::Point3f XYZ_world;
         Eigen::Vector3d XYZ_camera;
         Eigen::Vector3d XYZ_world;
-        Robot()
-        {
-            m_number = 0;
-            m_color = 0;
-            // m_armornums = 0;
-            m_id = -1;
-            XYZ_camera = {0.0, 0.0, 0.0};
-            XYZ_world = {0.0, 0.0, 0.0};
-        }
+        // Robot()
+        // {
+        //     m_number = 0;
+        //     m_color = 0;
+        //     // m_armornums = 0;
+        //     m_id = -1;
+        //     XYZ_camera = {0.0, 0.0, 0.0};
+        //     XYZ_world = {0.0, 0.0, 0.0};
+        // }
     };
     struct DebugParam
     {
@@ -157,9 +157,9 @@ namespace armor_detector
         ~Detector();
 
         // void run();
-        bool armor_detect(TaskData &src, bool& is_target_lost);
-        void RobotMatch(const int id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
-        void robot_detect(TaskData& src);
+        bool armor_detect(TaskData &src, bool& is_target_lost, std::vector<Armor> &last_armors);
+        // void RobotMatch(const int id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
+        // void robot_detect(TaskData& src);
 
 
         // void RobotMatch(const int id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
@@ -174,10 +174,10 @@ namespace armor_detector
         rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
 
         std::vector<Armor> armors;
-        std::vector<Armor> last_armors;
+        // std::vector<Armor> last_armors;
 
-        std::vector<Robot> robot_results;
-        std::vector<Robot> final_robot_results;
+        // std::vector<Robot> robot_results;
+        // std::vector<Robot> final_robot_results;
 
         bool is_init_;
         ofstream data_save_;
