@@ -14,7 +14,7 @@
 #include <cv_bridge/cv_bridge.h>
 
 //custom message
-#include "global_interface/msg/autoaim.hpp"
+#include "global_interface/msg/detection_array.hpp"
 
 using namespace global_user;
 using namespace coordsolver;
@@ -22,7 +22,7 @@ namespace armor_detector
 {
     class DetectorNode : public rclcpp::Node
     {
-        typedef global_interface::msg::Autoaim AutoaimMsg;
+        typedef global_interface::msg::DetectionArray DetectionArrayMsg;
 
     public:
         DetectorNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
@@ -40,7 +40,7 @@ namespace armor_detector
         ImageSize image_size_;
 
         // Pub target armor msg.
-        rclcpp::Publisher<AutoaimMsg>::SharedPtr armor_info_pub_;
+        rclcpp::Publisher<DetectionArrayMsg>::SharedPtr armor_info_pub_;
     private:    
         // Params callback.
         bool updateParam();

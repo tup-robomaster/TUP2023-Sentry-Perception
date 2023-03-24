@@ -41,7 +41,7 @@ namespace armor_detector
         qos.durability_volatile();
         
         // target info pub.
-        armor_info_pub_ = this->create_publisher<AutoaimMsg>("/armor_info", qos);
+        armor_info_pub_ = this->create_publisher<DetectionArrayMsg>("/armor_info", qos);
 
         // CameraType camera_num;
         this->declare_parameter<int>("camera_num", 1);
@@ -176,7 +176,7 @@ namespace armor_detector
             if(!flag)
             {
                 robot_temp.m_id = results[i].id;
-                cout<<"armor:"<<robot_temp.m_id<<endl;
+                // cout<<"armor:"<<robot_temp.m_id<<endl;
                 robot_temp.m_color = results[i].color;
                 robot_temp.m_number = results[i].conf;
                 robot_temp.m_rect = results[i].roi;
@@ -233,17 +233,29 @@ namespace armor_detector
         src.timestamp = (img_sub_time - time_start_).nanoseconds();
         std::vector<Armor> armors;
         
-        AutoaimMsg target_info;
+        DetectionArrayMsg target_info;
         bool is_target_lost = true;
         param_mutex_.lock();
         if(detector_->armor_detect(src, is_target_lost, armors))
         {   
-            RCLCPP_INFO(this->get_logger(), "armors detector...");
+            // RCLCPP_INFO(this->get_logger(), "no armors detector...");
+            // RCLCPP_WARN_THROTTLE(this->get_logger(), this->steady_clock_, 500, "No suitable targets...");
 
         }
         param_mutex_.lock();
         // target_info.is_target_lost = is_target_lost;
         robot_detect(src, armors);
+        DetectionArrayMsg robots_temp;
+        for(int i = 0; i < final_robot_results.size(); i++)
+        {
+            target_info.id = final_robot_results[i].m_id;
+            target_info.x = final_robot_results[i].XYZ_world[0];
+            target_info.y = final_robot_results[i].XYZ_world[1];
+            target_info.timestamp = src.timestamp;
+        }
+        
+
+
       
         // Publish target's information containing 3d point and timestamp.
         armor_info_pub_->publish(std::move(target_info));      
