@@ -83,13 +83,13 @@ namespace armor_detector
     // {
     //     std::vector<std::vector<Armor>> detected_objects_temp;
     //     detected_objects_temp.push_back(meas.cam1_objects);
-    //     detected_objects_temp.push_back(meas.cam2_objects);
-    //     detected_objects_temp.push_back(meas.cam3_objects);
+    //     // detected_objects_temp.push_back(meas.cam2_objects);
+    //     // detected_objects_temp.push_back(meas.cam3_objects);
 
     //     std::vector<double> src_times;
     //     src_times.push_back(meas.img1_time);
-    //     src_times.push_back(meas.img2_time);
-    //     src_times.push_back(meas.img3_time);
+    //     // src_times.push_back(meas.img2_time);
+    //     // src_times.push_back(meas.img3_time);
 
     //     bool syncFlag = false;
 
@@ -203,7 +203,7 @@ namespace armor_detector
             RobotMatch(i,obj,robots); 
             if(robot_results.empty())
             {
-                RCLCPP_INFO(this->get_logger(), "No Detect Robot...");
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No Detect Robot...");
             }
             for(int j = 0; j < robot_results.size();j++)
             {
@@ -215,7 +215,7 @@ namespace armor_detector
         }
         if (final_robot_results.empty())
         {
-            RCLCPP_INFO(this->get_logger(), "No Detect Final_Robot...");
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No Detect Final_Robot...");
         }
         else
         {
@@ -230,7 +230,8 @@ namespace armor_detector
     void DetectorNode::detect(TaskData& src)
     {
         auto img_sub_time = detector_->steady_clock_.now();
-        src.timestamp = (img_sub_time - time_start_).nanoseconds();
+        src.timestamp = (img_sub_time - time_start_).nanoseconds()/1e8;
+        
         std::vector<Armor> armors;
         
         DetectionArrayMsg target_info;
@@ -238,13 +239,17 @@ namespace armor_detector
         param_mutex_.lock();
         if(detector_->armor_detect(src, is_target_lost, armors))
         {   
-            // RCLCPP_INFO(this->get_logger(), "no armors detector...");
-            // RCLCPP_WARN_THROTTLE(this->get_logger(), this->steady_clock_, 500, "No suitable targets...");
+            RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 500, "no armors detector...");
 
         }
         param_mutex_.lock();
         // target_info.is_target_lost = is_target_lost;
         robot_detect(src, armors);
+        auto last_time = detector_->steady_clock_.now();
+        auto timeend = (img_sub_time - last_time).nanoseconds()/1e8;
+        if(timeend >= 0.2)
+            return ;
+        // RCLCPP_INFO(this->get_logger(), "---------------------------%lf",timeend);
         DetectionArrayMsg robots_temp;
         for(int i = 0; i < final_robot_results.size(); i++)
         {
@@ -254,9 +259,6 @@ namespace armor_detector
             target_info.timestamp = src.timestamp;
         }
         
-
-
-      
         // Publish target's information containing 3d point and timestamp.
         armor_info_pub_->publish(std::move(target_info));      
         
@@ -272,6 +274,9 @@ namespace armor_detector
         // RCLCPP_INFO(this->get_logger(), "image callback...");
         TaskData src;
         std::vector<Armor> armors;
+        // rclcpp::Time time = img_info->header.stamp;
+        // rclcpp::Time now = this->get_clock()->now();
+        // double dura = (now.nanoseconds() - time.nanoseconds()) / 1e6;
 
         if(!img_info)
             return;
@@ -291,52 +296,52 @@ namespace armor_detector
         }
         
     }
-    void DetectorNode::imageCallback2(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
-    {
-        // RCLCPP_INFO(this->get_logger(), "image callback...");
-        TaskData src2;
-        std::vector<Armor> armors2;
+    // void DetectorNode::imageCallback2(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
+    // {
+    //     // RCLCPP_INFO(this->get_logger(), "image callback...");
+    //     TaskData src2;
+    //     std::vector<Armor> armors2;
 
-        if(!img_info)
-            return;
-        auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
-        img.copyTo(src2.img);
+    //     if(!img_info)
+    //         return;
+    //     auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
+    //     img.copyTo(src2.img);
 
-        //目标检测接口函数
-        detect(src2);
+    //     //目标检测接口函数
+    //     detect(src2);
 
-        debug_.show_img = this->get_parameter("show_img").as_bool();
-        if(debug_.show_img)
-        {
-            // RCLCPP_INFO(this->get_logger(), "show img...");
-            cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
-            cv::imshow("dst", src2.img);
-            cv::waitKey(1);
-        }
-    }
-    void DetectorNode::imageCallback3(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
-    {
-        // RCLCPP_INFO(this->get_logger(), "image callback...");
-        TaskData src3;
-        std::vector<Armor> armors3;
+    //     debug_.show_img = this->get_parameter("show_img").as_bool();
+    //     if(debug_.show_img)
+    //     {
+    //         // RCLCPP_INFO(this->get_logger(), "show img...");
+    //         cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
+    //         cv::imshow("dst", src2.img);
+    //         cv::waitKey(1);
+    //     }
+    // }
+    // void DetectorNode::imageCallback3(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
+    // {
+    //     // RCLCPP_INFO(this->get_logger(), "image callback...");
+    //     TaskData src3;
+    //     std::vector<Armor> armors3;
 
-        if(!img_info)
-            return;
-        auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
-        img.copyTo(src3.img);
+    //     if(!img_info)
+    //         return;
+    //     auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
+    //     img.copyTo(src3.img);
 
-        //目标检测接口函数
-        detect(src3);
+    //     //目标检测接口函数
+    //     detect(src3);
 
-        debug_.show_img = this->get_parameter("show_img").as_bool();
-        if(debug_.show_img)
-        {
-            // RCLCPP_INFO(this->get_logger(), "show img...");
-            cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
-            cv::imshow("dst", src3.img);
-            cv::waitKey(1);
-        }
-    }
+    //     debug_.show_img = this->get_parameter("show_img").as_bool();
+    //     if(debug_.show_img)
+    //     {
+    //         // RCLCPP_INFO(this->get_logger(), "show img...");
+    //         cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
+    //         cv::imshow("dst", src3.img);
+    //         cv::waitKey(1);
+    //     }
+    // }
 
     /**
      * @brief 初始化detector类

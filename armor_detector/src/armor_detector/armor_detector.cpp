@@ -37,7 +37,7 @@ namespace armor_detector
 
         auto input = src.img;
         timestamp = src.timestamp;
-       
+        is_target_lost = false;
 
         // Eigen::Matrix3d rmat_imu;
        
@@ -223,7 +223,7 @@ namespace armor_detector
             last_armors = armors;
             for(int i = 0; i < armors.size(); i++)
             {
-            // RCLCPP_INFO(logger_, "armor id:%d",last_armors[i].id );
+            RCLCPP_INFO(logger_, "armor id:%d",last_armors[i].id );
             }
             // robot_detect(src);
             // cout<<"final_robot:"<<final_robot_results.size()<<endl;
@@ -235,8 +235,7 @@ namespace armor_detector
             } 
             
         }
-        is_target_lost = false;
-        return true;
+        return is_target_lost;
     }
 
  
