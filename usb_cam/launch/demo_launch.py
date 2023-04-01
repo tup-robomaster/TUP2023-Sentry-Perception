@@ -50,28 +50,23 @@ def generate_launch_description():
     args, unknown = parser.parse_known_args(sys.argv[4:])
 
     usb_cam_dir = get_package_share_directory('usb_cam')
-    print()
     # get path to params file
-    params_path = os.path.join(
-        usb_cam_dir,armor_detector
-        'config',
-        'params.yaml'
-    )
-
+    params_path_l = os.path.join(usb_cam_dir, 'config', 'usb_left','params.yaml')
+    params_path_r = os.path.join(usb_cam_dir, 'config', 'usb_right','params.yaml')
     node_name = args.node_name
 
-    print(params_path)
     ld.add_action(Node(
         package='usb_cam', executable='usb_cam_node_exe', output='screen',
-        name=node_name,
-        # namespace=ns,
-        parameters=[params_path]
+        name="usb_cam_node_r",
+        parameters=[params_path_r],
+        remappings=[("image","/usb_right/image_raw"),
+                    ("camera_info","/usb_right/camera_info")]
         ))
     ld.add_action(Node(
-        package='usb_cam', executable='show_image.py', output='screen',
-        # namespace=ns,
-        # arguments=[image_manip_dir + "/data/mosaic.jpg"])
-        # remappings=[('image_in', 'image_raw')]
+        package='usb_cam', executable='usb_cam_node_exe', output='screen',
+        name="usb_cam_node_l",
+        parameters=[params_path_l],
+        remappings=[("image","/usb_left/image_raw"),
+                    ("camera_info","/usb_left/camera_info")]
         ))
-
     return ld

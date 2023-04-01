@@ -12,7 +12,7 @@ static constexpr float BBOX_CONF_THRESH = 0.75;
 static constexpr float MERGE_CONF_ERROR = 0.15;
 static constexpr float MERGE_MIN_IOU = 0.9;
 
-namespace armor_detector
+namespace perception_detector
 {
     static inline int argmax(const float *ptr, int len) 
     {
@@ -332,11 +332,6 @@ namespace armor_detector
 
     bool ArmorDetector::initModel(std::string path)
     {
-        // for(auto &device : core.get_available_devices())
-        // {
-        //     std::cout << "device:" << device << std::endl;
-        // }
-
         std::cout << "Start initialize model..." << std::endl;
         // Setting Configuration Values
         core.set_property("CPU", ov::enable_profiling(true));
@@ -398,7 +393,7 @@ namespace armor_detector
         // auto output = infer_request.get_tensor("tensor_name");
         // const float output_buffer = output.data<const float>();
         // output_buffer[] - accessing output tensor data 
-
+        std::cout << "OV initialzation done..." << std::endl;
         return true;
     }
 

@@ -17,31 +17,31 @@ def generate_launch_description():
     cam_config = os.path.join(share_path_usb, 'config', 'params.yaml')
     autoaim_config = os.path.join(share_path, 'config', 'autoaim.yaml')
 
-    cam_node = Node(
-        name = "usb_cam",
-        package = "usb_cam",
-        executable = "usb_cam_node_exe",
-        parameters = [cam_config],
-        output = "screen"
-    )
-    # show_image = Node(
-    #     package='usb_cam', executable='show_image.py', output='screen',
-    #     # namespace=ns,
-    #     # arguments=[image_manip_dir + "/data/mosaic.jpg"])
-    #     # remappings=[('image_in', 'image_raw')]
-    #     )
+    params_path_l = os.path.join(share_path_usb, 'config', 'usb_left','params.yaml')
+    params_path_r = os.path.join(share_path_usb, 'config', 'usb_right','params.yaml')
 
-    armor_detector_node = Node(
-        name = 'armor_detector',
-        package = "armor_detector",
-        executable = 'armor_detector_node',
-        parameters = [autoaim_config],
+    # ld.add_action(Node(
+    #     package='usb_cam', executable='usb_cam_node_exe', output='screen',
+    #     name="usb_cam_node_l",
+    #     parameters=[params_path_l],
+    #     remappings=[("image","/usb_left/image_raw"),
+    #                 ("camera_info","/usb_left/camera_info")]
+    #     ))
+    ld.add_action(Node(
+        package='usb_cam', executable='usb_cam_node_exe', output='screen',
+        name="usb_cam_node_r",
+        parameters=[params_path_r],
+        remappings=[("image","/usb_right/image_raw"),
+                    ("camera_info","/usb_right/camera_info")]
+        ))
+    ld.add_action(Node(
+        package = "perception_detector",
+        name = 'perception_detector',
+        executable = 'perception_detector_node',
         output = 'screen'
-    )
-
-    ld.add_action(cam_node)
+    ))
     # ld.add_action(show_image)
-    ld.add_action(armor_detector_node)
+    # armor_detector_node)
 
     return ld
 

@@ -26,7 +26,7 @@
 #include "../../global_user/include/global_user/global_user.hpp"
 
 using namespace global_user;
-namespace armor_detector
+namespace perception_detector
 {
     struct ArmorObject : Object
     {

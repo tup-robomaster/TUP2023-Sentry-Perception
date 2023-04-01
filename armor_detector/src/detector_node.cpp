@@ -1,37 +1,17 @@
 #include "../include/detector_node.hpp"
 
 using namespace std::placeholders;
-namespace armor_detector
+namespace perception_detector
 {
 
     DetectorNode::DetectorNode(const rclcpp::NodeOptions& options)
-    : Node("armor_detector", options)
+    : Node("perception_detector", options)
     {
         RCLCPP_WARN(this->get_logger(), "Starting detector node...");
+        initParams();
 
-        // 问题：try-catch块中的代码可能会抛出异常，如果抛出异常，将会导致detector_指针为空，可能会导致程序崩溃。
-        try
-        {   //detector类初始化
-            this->detector_ = initDetector();
-        }
-        catch(const std::exception& e)
-        {
-            RCLCPP_FATAL(this->get_logger(), "Fatal while initializing detector class: %s", e.what());
-        }
-
-        if(!detector_->is_init_)
-        {
-            RCLCPP_INFO(this->get_logger(), "Initializing network model...");
-            detector_->armor_detector_.initModel(path_params_.network_path);
-            detector_->coordsolver_.loadParam(path_params_.camera_param_path, path_params_.camera_name);
-            detector_->is_init_ = true;
-
-        }
-        RCLCPP_INFO(this->get_logger(), "Initialize network model end...");
-        time_start_ = detector_->steady_clock_.now();
-
+        img_sub_.clear();
         //QoS    
-
         rclcpp::QoS qos(0);
         qos.keep_last(5);
         qos.best_effort();
@@ -41,334 +21,298 @@ namespace armor_detector
         qos.durability_volatile();
         
         // target info pub.
-        armor_info_pub_ = this->create_publisher<DetectionArrayMsg>("/armor_info", qos);
-
-        // CameraType camera_num;
-        this->declare_parameter<int>("camera_num", 1);
-        int camera_num = this->get_parameter("camera_num").as_int();
-
-        // Subscriptions transport type.
         std::string transport_type = this->declare_parameter("subscribe_compressed", false) ? "compressed" : "raw";
-        
-        image_size_ = image_info_.image_size_map[camera_num];
-        // image sub.
-        // RCLCPP_INFO(this->get_logger(), "start image callback...");
-        for (int i = 1; i <= camera_num; i++){
-            RCLCPP_INFO(this->get_logger(), "start image%d callback...",i);
-            std::string camera_topic = image_info_.camera_topic_map[camera_num];
-            img_sub_ = std::make_shared<image_transport::Subscriber>(image_transport::create_subscription(this, camera_topic,
-                std::bind(&DetectorNode::imageCallback, this, _1), transport_type));
+        perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("/perception_info", qos);
+        // CameraType camera_num;
+        std::cout<<path_params_.camera_param_path<<std::endl;
+        YAML::Node config = YAML::LoadFile(path_params_.camera_param_path);
+        const YAML::Node& top_node = config["cams"];
+        // 获取本级列表并遍历所有元素
+        YAML::const_iterator it = top_node.begin();
+        for (int i=0; i < top_node.size(); ++i)
+        {
+            // Get key name
+            const std::string key = it->first.as<std::string>();
+            // Get sub-node for key
+            const YAML::Node& sub_node = it->second;
+            // Loop over keys in sub-node
+            std::string camera_topic = sub_node["image_topic"].as<std::string>();
+            std::string camera_frame = sub_node["frame_id"].as<std::string>();
+            std::string camera_info_path = sub_node["camera_info_path"].as<std::string>();
+            auto detector = std::make_unique<Detector>(path_params_, detector_params_, debug_);
+            detector->setCameraIntrinsicsByYAML(camera_info_path);
+            img_sub_.push_back(std::make_shared<image_transport::Subscriber>(image_transport::create_subscription(this, camera_topic,
+                std::bind(&DetectorNode::imageCallback, this, _1), transport_type)));
+            registered_cams.push_back(camera_frame);
+            detectors_.push_back(std::move(detector));
+            RCLCPP_INFO(this->get_logger(), "Registered callback for %s ...", key.c_str());
+            ++it;
         }
+        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 100ms, std::bind(&DetectorNode::postProcessCallback, this));
+        tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+        tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     }
 
     DetectorNode::~DetectorNode()
     {
        
     }
-
-    // 用于存储测量组的数据，包括三个图像的时间和三个相机检测到的装甲板信息。
-    struct MeasureGroup
+    void DetectorNode::postProcessCallback()
     {
-        double img1_time;
-        double img2_time;
-        double img3_time;
-
-        std::vector<Armor> cam1_objects;
-        std::vector<Armor> cam2_objects;
-        std::vector<Armor> cam3_objects;
-    };
-    MeasureGroup Measures;
-
-    // bool sync_packages(MeasureGroup meas, std::vector<std::vector<Armor>> &detected_objects)
-    // {
-    //     std::vector<std::vector<Armor>> detected_objects_temp;
-    //     detected_objects_temp.push_back(meas.cam1_objects);
-    //     detected_objects_temp.push_back(meas.cam2_objects);
-    //     detected_objects_temp.push_back(meas.cam3_objects);
-
-    //     std::vector<double> src_times;
-    //     src_times.push_back(meas.img1_time);
-    //     src_times.push_back(meas.img2_time);
-    //     src_times.push_back(meas.img3_time);
-
-    //     bool syncFlag = false;
-
-    //     for (int i = 0; i < src_times.size(); i++)
-    //     {
-    //         if (src_times[i] != 0 && () < 0.5)
-    //         {
-    //             detected_objects.push_back(detected_objects_temp[i]);
-    //             syncFlag = true;
-    //         }
-    //         else
-    //         {
-    //             std::vector<Armor> emptyObject;            
-    //             detected_objects.push_back(emptyObject);
-    //             // RCLCPP_WARN(this->get_logger(), "Camera [%d] get image failed ..",i + 1);
-    //         }
-    //     }
-    //     if (!syncFlag)
-    //     {
-    //         // RCLCPP_WARN(this->get_logger(), "image failed ..");
-    //     }
-    //     return syncFlag;
-    // }
-    // void DetectorNode::PublishDetectRobots(rclcpp::Publisher robot_detector_pub, std::vector<Robot> robot_results)
-    // {
-    //     robot_msgs::RobotLocation robots_temp;
-    //     robot_msgs::GlobalMap submap_msg;
-    //     submap_msg.header.stamp = ros::Time::now();
-
-    //     for (int i = 0; i < robot_results.size(); ++i)
-    //     {
-    //         robots_temp.id = robot_results[i].m_id;
-    //         robots_temp.x = robot_results[i].XYZ_body.x;
-    //         robots_temp.y = robot_results[i].XYZ_body.y;
-    //         robots_temp.yaw = 0;
-    //         submap_msg.robots.push_back(robots_temp);
-    //     }
-
-    //     robot_detector_pub.publish(submap_msg);
-    // }
-    void DetectorNode::RobotMatch(int id, std::vector<Armor> &results, std::vector<Robot> &Robots)
-    {
-        std::vector<Armor> last;
-
-        int numarmor = 0;
-        std::vector<int> repeat_index;
-        for (int i = 0; i < results.size(); i++)
-        {
-            Robot robot_temp ;
-            bool flag = false;
-            for(int j = i + 1; j < results.size(); j++)
+        std::vector<global_interface::msg::DetectionArray> detections_vec;
+        detections_mutex_.lock();
+        if (!detections_deque_.empty())
+        {  
+            std::sort(detections_deque_.begin(), detections_deque_.end(), [](const global_interface::msg::DetectionArray& a,
+                                                                            const global_interface::msg::DetectionArray& b)
+                                                                            {return (a.header.stamp.sec + 1e-9 * a.header.stamp.nanosec) <
+                                                                            (b.header.stamp.sec + 1e-9 * b.header.stamp.nanosec);});
+            while (detections_deque_.size() > 0)
             {
-                if(results[i].id == results[j].id)
+                auto first_element = detections_deque_.front();
+                auto duration = rclcpp::Duration(this->now() - rclcpp::Time(first_element.header.stamp));
+                if (duration < 70ms)
                 {
-                    float dis = sqrt(pow((results[i].armor3d_world[0] - results[j].armor3d_world[0]),2)+
-                            pow((results[i].armor3d_world[1] - results[j].armor3d_world[1]),2));
-                    if(dis < 0.5)
-                    {
-                        flag = true;
-                        // repeat_index.push_back(i);
-                        
-                        robot_temp.m_id = results[i].id;
-                        robot_temp.m_color = results[i].color;
-                        robot_temp.m_rect.x = results[i].roi.x;
-                        robot_temp.m_rect.y = results[i].roi.y;
-                        robot_temp.XYZ_world[0] = (results[i].armor3d_world[0] + results[j].armor3d_world[1])/2;
-                        robot_temp.XYZ_world[1] = (results[i].armor3d_world[1] + results[j].armor3d_world[1])/2;
-                        robot_temp.m_rect.x = min(results[i].roi.x, results[j].roi.x);
-                        robot_temp.m_rect.y = min(results[i].roi.y, results[j].roi.y);
-                        robot_temp.m_number = min(results[i].conf, results[j].conf);
-                        if(results[i].roi.x <= results[j].roi.x)
-                            robot_temp.m_rect.width = results[j].roi.x + results[j].roi.width - results[i].roi.x ;
-                        else
-                            robot_temp.m_rect.width = results[i].roi.x + results[i].roi.width - results[j].roi.x ;
-                        if(results[i].roi.y <= results[j].roi.y)
-                            robot_temp.m_rect.height = results[j].roi.y + results[j].roi.height - results[i].roi.y ;
-                        else
-                            robot_temp.m_rect.height = results[i].roi.y + results[i].roi.height - results[j].roi.y ;
-                        robot_results.push_back(robot_temp);
-                        continue;
-                    }
+                    break;
                 }
-            }
-            if(!flag)
-            {
-                robot_temp.m_id = results[i].id;
-                // cout<<"armor:"<<robot_temp.m_id<<endl;
-                robot_temp.m_color = results[i].color;
-                robot_temp.m_number = results[i].conf;
-                robot_temp.m_rect = results[i].roi;
-                robot_temp.XYZ_world = results[i].armor3d_world;
-                robot_temp.XYZ_camera = results[i].armor3d_cam;
-                robot_results.push_back(robot_temp);
-            }
-        }
-    }
-    void DetectorNode::robot_detect(TaskData& src, std::vector<Armor> &armors)
-    {
-        std::vector<std::vector<Armor>> detected_objects;
-        // std::vector<Robot> robot_result;
-        // std::vector<Robot> final_robot_results;
-        detected_objects.clear();
-        detected_objects.push_back(armors);
-
-        for(int i = 0 ; i < detected_objects.size(); i++)
-        {
-            // RCLCPP_INFO(this->get_logger(), "---------------------------");
-            
-            std::vector<Armor> obj = detected_objects[i];
-            std::vector<Robot> robots;
-            RobotMatch(i,obj,robots); 
-            if(robot_results.empty())
-            {
-                RCLCPP_INFO(this->get_logger(), "No Detect Robot...");
-            }
-            for(int j = 0; j < robot_results.size();j++)
-            {
-                if(robot_results[j].m_id != 0)
+                else
                 {
-                    final_robot_results.push_back(robot_results[j]);
+                    detections_deque_.pop_front();
                 }
             }
         }
-        if (final_robot_results.empty())
-        {
-            RCLCPP_INFO(this->get_logger(), "No Detect Final_Robot...");
-        }
-        else
-        {
-            final_robot_results.clear();
-            final_robot_results = robot_results;
 
+        for (auto detections : detections_deque_)
+        {
+            detections_vec.push_back(detections);
+        }
+        detections_mutex_.unlock();
+
+        if (!detections_vec.empty())
+        {
+            global_interface::msg::DetectionArray detections_msg;
+            detections_msg.header= detections_vec[0].header;
+            std::vector<Armor> armors;
+            for (auto detections : detections_vec)
+            {
+                auto armors_tmp = detectionArray2Armors(detections);
+                for (auto armor : armors_tmp)
+                    armors.push_back(armor);
+            }
+            sphereNMS(armors);
+            for (auto armor : armors)
+            {
+                auto detection = armor2Detection(armor, detections_vec[0].header);
+                detections_msg.detections.push_back(detection);
+            }
+            perception_info_pub_->publish(detections_msg);
         }
     }
 
-
-
-    void DetectorNode::detect(TaskData& src)
+    global_interface::msg::Detection DetectorNode::armor2Detection(Armor armor, std_msgs::msg::Header header)
     {
-        auto img_sub_time = detector_->steady_clock_.now();
-        src.timestamp = (img_sub_time - time_start_).nanoseconds();
+        global_interface::msg::Detection detection;
+        detection.header = header;
+        detection.conf = armor.conf;
+        detection.type = armor.key;
+        detection.center.position.x = armor.armor3d_cam[0];
+        detection.center.position.y = armor.armor3d_cam[1];
+        detection.center.position.z = armor.armor3d_cam[2];
+        // std::cout<<armor.key<<std::endl;
+        return detection;
+    }
+
+    Armor DetectorNode::detection2Armor(global_interface::msg::Detection detection)
+    {
+        Armor armor;
+        armor.conf = detection.conf;
+        armor.key = detection.type;
+        armor.armor3d_cam[0] = detection.center.position.x;
+        armor.armor3d_cam[1] = detection.center.position.y;
+        armor.armor3d_cam[2] = detection.center.position.z;
+        return armor;
+    }
+
+    std::vector<Armor> DetectorNode::detectionArray2Armors(global_interface::msg::DetectionArray detections)
+    {
         std::vector<Armor> armors;
-        
-        DetectionArrayMsg target_info;
-        bool is_target_lost = true;
-        param_mutex_.lock();
-        if(detector_->armor_detect(src, is_target_lost, armors))
-        {   
-            // RCLCPP_INFO(this->get_logger(), "no armors detector...");
-            // RCLCPP_WARN_THROTTLE(this->get_logger(), this->steady_clock_, 500, "No suitable targets...");
-
-        }
-        param_mutex_.lock();
-        // target_info.is_target_lost = is_target_lost;
-        robot_detect(src, armors);
-        DetectionArrayMsg robots_temp;
-        for(int i = 0; i < final_robot_results.size(); i++)
+        std::vector<global_interface::msg::Detection> detection_vec = detections.detections;
+        for (auto detection : detections.detections)
         {
-            target_info.id = final_robot_results[i].m_id;
-            target_info.x = final_robot_results[i].XYZ_world[0];
-            target_info.y = final_robot_results[i].XYZ_world[1];
-            target_info.timestamp = src.timestamp;
+            auto armor = detection2Armor(detection);
+            armors.push_back(armor);
         }
-        
+        return armors;
+
+    }
+
+    bool DetectorNode::sphereNMS(std::vector<Armor> &armors)
+    {
+        //First Stage NMS:Armor
+        double max_sphere_dist = 0.5f;
+        std::map<int, bool> overlap_map;
+        std::map<int, std::vector<int>> overlap_idx_map;
+        struct ArmorWithOverlapCnt
+        {
+            Armor armor;
+            int overlap_cnt;
+        };
+        std::vector<ArmorWithOverlapCnt> first_nms_out;
+        std::vector<Armor> second_nms_out;
+        //Get overlap status.
+        for (int i = 0; i < armors.size(); i++)
+        {
+            for (int j = i+1; j< armors.size(); j++)
+            {
+                if (overlap_map[j])
+                    continue;
+                auto armor1 = armors[i];
+                auto armor2 = armors[j];
+                double sphere_dist = (armor1.armor3d_cam - armor2.armor3d_cam).norm();
+                if (sphere_dist < max_sphere_dist && armor1.key == armor2.key)
+                {
+                    overlap_map[j] = true;
+                    overlap_idx_map[i].push_back(j);
+                }
+            }
+        }
+        for (int i = 0; i < armors.size(); i++)
+        {
+            if (!overlap_map[i])
+            {
+                Armor armor = armors[i];
+                //Skip armor with no overlap armor,which might be a FN/FP sample.
+                if (overlap_idx_map[i].size() != 0)
+                {
+                    int overlap_cnt = overlap_idx_map[i].size();
+                    for (auto overlap_cnt : overlap_idx_map[i])
+                    {
+                        armor.armor3d_cam=armor.armor3d_cam + armors[overlap_cnt].armor3d_cam;
+                    }
+                    armor.armor3d_cam /= (overlap_cnt + 1);
+                    ArmorWithOverlapCnt armor_with_overlap_cnt = {armor, overlap_cnt};
+                    first_nms_out.push_back(armor_with_overlap_cnt);
+                }
+            }
+        }
 
 
-      
-        // Publish target's information containing 3d point and timestamp.
-        armor_info_pub_->publish(std::move(target_info));      
-        
+        //Second Stage NMS:Robot
+        //Sort by overlap cnt.
+        std::sort(first_nms_out.begin(), first_nms_out.end(), [](const ArmorWithOverlapCnt& a,
+                                                                            const ArmorWithOverlapCnt& b)
+                                                                            {return a.overlap_cnt > b.overlap_cnt;});
+        std::map<std::string, bool> is_key_appeared;
+        for (int i = 0; i < first_nms_out.size(); i++)
+        {
+            Armor armor = first_nms_out[i].armor;
+            if (!is_key_appeared[armor.key])
+            {
+                second_nms_out.push_back(armor);
+                is_key_appeared[armor.key] = true;
+            }
+        }
+        armors = second_nms_out;
+        return true;
     }
 
     /**
      * @brief 图像数据回调
-     * 
      * @param img_info 图像传感器数据
      */
     void DetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
     {
-        // RCLCPP_INFO(this->get_logger(), "image callback...");
-        TaskData src;
-        std::vector<Armor> armors;
-
-        if(!img_info)
-            return;
         auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
-        img.copyTo(src.img);
-
-        //目标检测接口函数
-        detect(src);
-
-        debug_.show_img = this->get_parameter("show_img").as_bool();
-        if(debug_.show_img)
+        std::string frame_id = img_info->header.frame_id;
+        //获取该相机所分配的detector idx.
+        auto cam_it = std::find(registered_cams.begin(), registered_cams.end(), frame_id);
+        if (cam_it != registered_cams.end())
         {
-            // RCLCPP_INFO(this->get_logger(), "show img...");
-            cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
-            cv::imshow("dst", src.img);
-            cv::waitKey(1);
+            int idx = cam_it - registered_cams.begin();
+            std::vector<Armor> armors;
+            if (detectors_.at(idx)->detect(img, armors))
+            {
+                //Transform from cam frame to base link.
+                geometry_msgs::msg::TransformStamped tf_msg;
+                try
+                {
+                    tf_msg = tf_buffer_->lookupTransform(frame_id, "gimbal_yaw_frame", img_info->header.stamp,
+                                                                         rclcpp::Duration::from_seconds(0.1));
+                }
+                catch (const tf2::TransformException &ex)
+                {
+                    RCLCPP_ERROR(this->get_logger(), "%s",ex.what());
+                    return;
+                }
+                //Transform detection.
+                std_msgs::msg::Header header = img_info->header;
+                global_interface::msg::DetectionArray detections;
+                detections.header = img_info->header;
+                detections.header.frame_id = "base_link";
+                for (auto armor : armors)
+                {
+                    auto detection = armor2Detection(armor, header);
+                    auto detection_transformed = detection;
+                    geometry_msgs::msg::PoseStamped pose, transformed_pose;
+                    pose.header = detection.header;
+                    pose.pose = detection.center;
+                    try {
+                        tf2::doTransform(pose, transformed_pose, tf_msg);
+                    } catch (tf2::TransformException &ex) {
+                        RCLCPP_ERROR(this->get_logger(), "Transform failed: %s", ex.what());
+                        return;
+                    }
+                    detection_transformed.header.frame_id = "base_link";
+                    detection_transformed.center = transformed_pose.pose;
+                    detections.detections.push_back(detection_transformed);
+                }
+
+                detections_mutex_.lock();
+                detections_deque_.push_back(detections);
+                detections_mutex_.unlock();
+
+                debug_.show_img = this->get_parameter("show_img").as_bool();
+                if(debug_.show_img)
+                {
+                    // RCLCPP_INFO(this->get_logger(), "show img...");
+                    cv::namedWindow(frame_id, cv::WINDOW_AUTOSIZE);
+                    cv::imshow(frame_id, img);
+                    cv::waitKey(1);
+                }
+            }
         }
-        
-    }
-    void DetectorNode::imageCallback2(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
-    {
-        // RCLCPP_INFO(this->get_logger(), "image callback...");
-        TaskData src2;
-        std::vector<Armor> armors2;
-
-        if(!img_info)
-            return;
-        auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
-        img.copyTo(src2.img);
-
-        //目标检测接口函数
-        detect(src2);
-
-        debug_.show_img = this->get_parameter("show_img").as_bool();
-        if(debug_.show_img)
+        else
         {
-            // RCLCPP_INFO(this->get_logger(), "show img...");
-            cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
-            cv::imshow("dst", src2.img);
-            cv::waitKey(1);
+            RCLCPP_WARN(this->get_logger(), "Detected invalid frame_id for detect...");
         }
-    }
-    void DetectorNode::imageCallback3(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
-    {
-        // RCLCPP_INFO(this->get_logger(), "image callback...");
-        TaskData src3;
-        std::vector<Armor> armors3;
 
-        if(!img_info)
-            return;
-        auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
-        img.copyTo(src3.img);
-
-        //目标检测接口函数
-        detect(src3);
-
-        debug_.show_img = this->get_parameter("show_img").as_bool();
-        if(debug_.show_img)
-        {
-            // RCLCPP_INFO(this->get_logger(), "show img...");
-            cv::namedWindow("dst", cv::WINDOW_AUTOSIZE);
-            cv::imshow("dst", src3.img);
-            cv::waitKey(1);
-        }
     }
 
     /**
-     * @brief 初始化detector类
+     * @brief 初始
      * 
-     * @return std::unique_ptr<Detector> 
+     * @return bool
      */
-    std::unique_ptr<Detector> DetectorNode::initDetector()
+    bool DetectorNode::initParams()
     {
         //Detector params.
         this->declare_parameter<int>("armor_type_wh_thres", 3);//大小装甲板长宽比阈值
-        this->declare_parameter<int>("max_armors_cnt", 8);//视野中最多装甲板数
-        this->declare_parameter<bool>("color", true);
         this->declare_parameter<double>("armor_roi_expand_ratio_width", 1.1);
         this->declare_parameter<double>("armor_roi_expand_ratio_height", 1.5);
         this->declare_parameter<double>("armor_conf_high_thres", 0.82);
         
-        //TODO:Set by your own path.
-        this->declare_parameter("camera_name", "KE0200110075"); //相机型号
-        this->declare_parameter("camera_param_path", "src/armor_detector/config/camera_info.yaml");
-        this->declare_parameter("network_path", "src/armor_detector/model/opt-0527-002.xml");
-        
+        this->declare_parameter("camera_param_path", "/config/config.yaml");
+        this->declare_parameter("network_path", "/model/opt-0527-002.xml");
         //Debug.
         this->declare_parameter("show_aim_cross", false);
-        this->declare_parameter("show_img",false);
-        this->declare_parameter("detect_red", true);
+        this->declare_parameter("show_img", true);
         this->declare_parameter("show_fps", false);
-        this->declare_parameter("show_all_armors", false);
+        this->declare_parameter("show_all_armors", true);
         
         //Update param from param server.
-        updateParam();
+        updateParams();
 
-        return std::make_unique<Detector>(path_params_, detector_params_, debug_);
+        return true;
     }
 
     /**
@@ -377,29 +321,20 @@ namespace armor_detector
      * @return true 
      * @return false 
      */
-    bool DetectorNode::updateParam()
+    bool DetectorNode::updateParams()
     {
         detector_params_.armor_type_wh_thres = this->get_parameter("armor_type_wh_thres").as_int();
-        detector_params_.max_armors_cnt = this->get_parameter("max_armors_cnt").as_int();
-        bool det_red = this->get_parameter("color").as_bool();
-        if(det_red)
-            detector_params_.color = RED;
-        else
-            detector_params_.color = BLUE;
         detector_params_.armor_roi_expand_ratio_width = this->get_parameter("armor_roi_expand_ratio_width").as_double();
         detector_params_.armor_roi_expand_ratio_height = this->get_parameter("armor_roi_expand_ratio_height").as_double();
         detector_params_.armor_conf_high_thres = this->get_parameter("armor_conf_high_thres").as_double();
 
-        debug_.detect_red = this->get_parameter("detect_red").as_bool();
         debug_.show_aim_cross = this->get_parameter("show_aim_cross").as_bool();
         debug_.show_img = this->get_parameter("show_img").as_bool();
         debug_.show_fps = this->get_parameter("show_fps").as_bool();
         debug_.show_all_armors = this->get_parameter("show_all_armors").as_bool();
-
-
-        path_params_.camera_name = this->get_parameter("camera_name").as_string();
-        path_params_.camera_param_path = this->get_parameter("camera_param_path").as_string();
-        path_params_.network_path = this->get_parameter("network_path").as_string();
+        string pkg_share_pth = ament_index_cpp::get_package_share_directory("perception_detector");
+        path_params_.camera_param_path = pkg_share_pth + this->get_parameter("camera_param_path").as_string();
+        path_params_.network_path = pkg_share_pth + this->get_parameter("network_path").as_string();
 
         return true;
     }
@@ -408,11 +343,11 @@ namespace armor_detector
 int main(int argc, char** argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<armor_detector::DetectorNode>());
+    rclcpp::spin(std::make_shared<perception_detector::DetectorNode>());
     rclcpp::shutdown();
 
     return 0;
 }
 
 #include "rclcpp_components/register_node_macro.hpp"
-RCLCPP_COMPONENTS_REGISTER_NODE(armor_detector::DetectorNode)
+RCLCPP_COMPONENTS_REGISTER_NODE(perception_detector::DetectorNode)

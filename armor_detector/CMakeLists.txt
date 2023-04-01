@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(armor_detector)
+project(perception_detector)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -25,8 +25,13 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(depthai_ros_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -58,6 +63,10 @@ set(dependencies
   image_transport
   sensor_msgs
   # InferenceEngine 
+  tf2_ros
+  tf2
+  tf2_geometry_msgs
+  depthai_ros_msgs
   OpenVINO
   Ceres
   Eigen3
@@ -91,7 +100,7 @@ target_compile_definitions(${PROJECT_NAME}
 # target_compile_definitions(${PROJECT_NAME}
 # PRIVATE "COMPOSITION_BUILDING_DLL")
   
-add_executable(armor_detector_node
+add_executable(${PROJECT_NAME}_node
   # ./include/armor_detector/inference.h 
   # include/armor_detector/inference_api2.hpp
   # ./include/armor_detector/spinning_detector.hpp
@@ -106,11 +115,11 @@ add_executable(armor_detector_node
 #   ./src/test/test.cpp 
 # )
 
-ament_target_dependencies(armor_detector_node
+ament_target_dependencies(${PROJECT_NAME}_node
   ${dependencies}
 )
 
-target_link_libraries(armor_detector_node
+target_link_libraries(${PROJECT_NAME}_node
   # ${PROJECT_NAME}
   ${OpenCV_LIBRARIES}
   # ${InferenceEngine_LIBRARIES}
@@ -122,8 +131,8 @@ target_link_libraries(armor_detector_node
 )
 
 rclcpp_components_register_nodes(${PROJECT_NAME}
-  PLUGIN "armor_detector::DetectorNode"
-  EXECUTABLE armor_detector_node
+  PLUGIN "perception_detector::DetectorNode"
+  EXECUTABLE ${PROJECT_NAME}_node
 )
 
 # target_link_libraries(testing
@@ -140,13 +149,14 @@ install(TARGETS
 )
   
 install(TARGETS 
-  armor_detector_node
+  ${PROJECT_NAME}_node
   # testing 
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY 
+install(DIRECTORY
   launch
+  model
   config
   DESTINATION share/${PROJECT_NAME}
 )

@@ -13,13 +13,28 @@
 #include <image_transport/subscriber_filter.hpp>
 #include <cv_bridge/cv_bridge.h>
 
+//depthai msgs
+#include <depthai_ros_msgs/msg/spatial_detection_array.hpp>
+#include <depthai_ros_msgs/msg/spatial_detection.hpp>
+
+//tf2
+#include <tf2/transform_datatypes.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include "tf2_ros/transform_broadcaster.h"
+
+#include "geometry_msgs/msg/pose_stamped.hpp"
+
 //custom message
 #include "global_interface/msg/detection_array.hpp"
 
 using namespace global_user;
 using namespace coordsolver;
-namespace armor_detector
+namespace perception_detector
 {
+
     class DetectorNode : public rclcpp::Node
     {
         typedef global_interface::msg::DetectionArray DetectionArrayMsg;
@@ -28,49 +43,43 @@ namespace armor_detector
         DetectorNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
         ~DetectorNode();
         
-        void detect(TaskData& src);
-        void RobotMatch(int id, std::vector<Armor> &results, std::vector<Robot> &Robots);
-        void robot_detect(TaskData& src, std::vector<Armor> &armors);
-        // void PublishDetectRobots(rclcpp::Publisher robot_detector_pub, std::vector<Robot> robot_results);
-        // void RobotMatch(const int camera_id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
-
+        global_interface::msg::Detection armor2Detection(Armor armor, std_msgs::msg::Header header);
+        std::vector<Armor> detectionArray2Armors(global_interface::msg::DetectionArray detections);
+        Armor detection2Armor(global_interface::msg::Detection detection);
+        bool sphereNMS(std::vector<Armor> &armors);
     private:
         rclcpp::Time time_start_;
         ImageInfo image_info_;
         ImageSize image_size_;
 
+        std::vector<std::shared_ptr<image_transport::Subscriber>> img_sub_;
+        std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+        std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+        std::deque<global_interface::msg::DetectionArray> detections_deque_;
         // Pub target armor msg.
-        rclcpp::Publisher<DetectionArrayMsg>::SharedPtr armor_info_pub_;
+        rclcpp::Publisher<DetectionArrayMsg>::SharedPtr perception_info_pub_;
     private:    
         // Params callback.
-        bool updateParam();
-        
-    private:
+        bool updateParams();
         // Subscribe img. 
-        std::shared_ptr<image_transport::Subscriber> img_sub_;
-        std::shared_ptr<image_transport::Subscriber> img_sub_2;
-        std::shared_ptr<image_transport::Subscriber> img_sub_3;
         void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
-        void imageCallback2(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
-        void imageCallback3(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
-
+        void postProcessCallback();
         // Subscribe serial msg.
         Mutex msg_mutex_;
 
         
     public:
-    
         std::vector<Robot> robot_results;
         std::vector<Robot> final_robot_results;
-
+        std::vector<std::string> registered_cams;
         Mutex param_mutex_;
+        Mutex detections_mutex_;
         DetectorParam detector_params_;
-        // GyroParam gyro_params_;
         PathParam path_params_;
         DebugParam debug_;
-
-        std::unique_ptr<Detector> detector_;
-        std::unique_ptr<Detector> initDetector();
+        rclcpp::TimerBase::SharedPtr postprocess_timer_;
+        std::vector<std::unique_ptr<Detector>> detectors_;
+        bool initParams();
 
     };
 } //namespace detector

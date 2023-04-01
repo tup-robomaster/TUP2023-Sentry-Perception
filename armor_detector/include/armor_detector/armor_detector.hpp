@@ -10,7 +10,9 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <opencv2/opencv.hpp>
+#include <yaml-cpp/yaml.h>
 
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include "../inference/inference_api2.hpp"
 #include "../../global_user/include/global_user/global_user.hpp"
@@ -21,7 +23,7 @@ using namespace global_user;
 using namespace coordsolver;
 using namespace cv;
 using namespace std;
-namespace armor_detector
+namespace perception_detector
 {
     enum Color 
     {
@@ -91,23 +93,16 @@ namespace armor_detector
         }
     };
 
+    struct PathParam
+    {
+        std::string camera_param_path;
+        std::string network_path;
+    };
+
     struct DetectorParam
     {
-        // int dw, dh;             //letterbox对原图像resize的padding区域的宽度和高度
-        // float rescale_ratio;    //缩放比例 
-        // int max_delta_t;   //使用同一预测器的最大时间间隔(ms)
-
         int armor_type_wh_thres; //大小装甲板长宽比阈值
-        // int max_lost_cnt;        //最大丢失目标帧数
         int max_armors_cnt;    //视野中最多装甲板数
-        // int max_v;         //两次预测间最大速度(m/s)
-
-        // double no_crop_thres; //禁用ROI裁剪的装甲板占图像面积最大面积比值
-        // int hero_danger_zone; //英雄危险距离阈值，检测到有小于该距离的英雄直接开始攻击
-        // double no_crop_ratio;
-        // double full_crop_ratio;
-
-        // double max_delta_dist;
         double armor_roi_expand_ratio_width;
         double armor_roi_expand_ratio_height;
         double armor_conf_high_thres;
@@ -131,21 +126,6 @@ namespace armor_detector
         }
     };
 
-    struct PathParam
-    {
-        std::string camera_name;
-        std::string camera_param_path;
-        std::string network_path;
-        // std::string save_path;
-    };
-
-    enum SwitchStatus
-    {
-        NONE,
-        SINGER,
-        DOUBLE
-    };
-
     // std::vector<cv::Mat> _intrinsic_cvs;
     // std::vector<cv::Mat> _extrinsic_cvs;
     // std::vector<cv::Mat> _discoff_cvs;
@@ -157,7 +137,8 @@ namespace armor_detector
         ~Detector();
 
         // void run();
-        bool armor_detect(TaskData &src, bool& is_target_lost, std::vector<Armor> &last_armors);
+        bool detect(cv::Mat &src, std::vector<Armor> &armors);
+        bool setCameraIntrinsicsByYAML(const std::string& yaml_file_path);
         // void RobotMatch(const int id, const std::vector<Armor> &results, std::vector<Robot> &Robots);
         // void robot_detect(TaskData& src);
 
@@ -173,28 +154,19 @@ namespace armor_detector
     public:
         rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
 
-        std::vector<Armor> armors;
-        // std::vector<Armor> last_armors;
-
+        std::vector<Armor> last_armors;
+        cv::Mat intrinsic;
+        cv::Mat dis_coeff;
         // std::vector<Robot> robot_results;
         // std::vector<Robot> final_robot_results;
 
         bool is_init_;
         ofstream data_save_;
         ArmorDetector armor_detector_;
-        CoordSolver coordsolver_;
-
-        // SpinningDetector spinning_detector_;
     private:
         Armor last_armor;
         std::vector<ArmorObject> objects;
-
-        // std::vector<ArmorTracker> trackers;
-        // std::multimap<std::string, ArmorTracker> trackers_map;
         std::map<string, int> new_armors_cnt_map;    //装甲板计数map，记录新增装甲板数
-        
-        Eigen::Matrix3d rmat_imu;
-
         rclcpp::Logger logger_;
         ofstream file_;
         std::string path_prefix_ = "src/camera_driver/recorder/autoaim_dataset/";
@@ -221,14 +193,10 @@ namespace armor_detector
         Point2i roi_offset;
         Size2i input_size;
 
-        void showArmors(TaskData& src);
+        void showArmors(cv::Mat &src, std::vector<Armor> armors);
         void showCar(TaskData& src);
         
     private:
-        SwitchStatus last_last_status_;
-        SwitchStatus last_status_;
-        SwitchStatus cur_status_;
-        
         double cur_period_;
         double last_period_;
         deque<double> history_period_;
@@ -241,5 +209,5 @@ namespace armor_detector
         DebugParam debug_params_;
         PathParam path_params_;
         DetectorParam detector_params_;
-    }; 
+    };
 } //namespace detector

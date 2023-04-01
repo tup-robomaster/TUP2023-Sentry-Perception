@@ -85,7 +85,7 @@ int UsbCam::init_decoder(
   }
 
   avcodec_context_ = avcodec_alloc_context3(avcodec_);
-
+  std::cout<<"A"<<std::endl;
   // Suppress warnings of the following form:
   //
   // [swscaler @ 0x############] deprecated pixel format used, make sure you did set range correctly
@@ -130,7 +130,6 @@ int UsbCam::init_decoder(
 
   avcodec_context_->codec_type = AVMEDIA_TYPE_VIDEO;
 #endif
-
 #if LIBAVCODEC_VERSION_MAJOR < 55
   avframe_camera_size_ = avpicture_get_size(AV_PIX_FMT_YUV422P, image_width, image_height);
   avframe_rgb_size_ = avpicture_get_size(AV_PIX_FMT_RGB24, image_width, image_height);
@@ -763,6 +762,7 @@ bool UsbCam::start(
   io_method_t io_method, pixel_format_t pixel_format, color_format_t color_format,
   uint32_t image_width, uint32_t image_height, int framerate)
 {
+  std::cout<<"1"<<std::endl;
   camera_dev_ = dev;
 
   io_ = io_method;
@@ -793,7 +793,6 @@ bool UsbCam::start(
     std::cerr << "Unknown pixel format" << std::endl;
     return false;  // (EXIT_FAILURE);
   }
-
   // TODO(lucasw) throw exceptions instead of return value checking
   if (!open_device()) {
     return false;
