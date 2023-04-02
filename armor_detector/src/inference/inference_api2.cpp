@@ -334,7 +334,7 @@ namespace perception_detector
     {
         std::cout << "Start initialize model..." << std::endl;
         // Setting Configuration Values
-        core.set_property("CPU", ov::enable_profiling(true));
+        core.set_property("GPU", ov::enable_profiling(true));
 
         //Step 1.Create openvino runtime core
         model = core.read_model(path);
@@ -355,7 +355,7 @@ namespace perception_detector
         //Step 2. Compile the model
         compiled_model = core.compile_model(
             model,
-            "CPU",
+            "GPU",
             ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY)
             // "AUTO:CPU,CPU", 
             // ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY)
