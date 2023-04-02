@@ -26,15 +26,14 @@
 #include "tf2_ros/transform_broadcaster.h"
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
-
+#include "visualization_msgs/msg/marker.hpp"
+#include "visualization_msgs/msg/marker_array.hpp"
 //custom message
 #include "global_interface/msg/detection_array.hpp"
-
 using namespace global_user;
 using namespace coordsolver;
 namespace perception_detector
 {
-
     class DetectorNode : public rclcpp::Node
     {
         typedef global_interface::msg::DetectionArray DetectionArrayMsg;
@@ -43,9 +42,13 @@ namespace perception_detector
         DetectorNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions());
         ~DetectorNode();
         
+        bool initParams();
+        bool updateParams();
+
         global_interface::msg::Detection armor2Detection(Armor armor, std_msgs::msg::Header header);
         std::vector<Armor> detectionArray2Armors(global_interface::msg::DetectionArray detections);
         Armor detection2Armor(global_interface::msg::Detection detection);
+        std::vector<visualization_msgs::msg::Marker> getvisRobotMarkers(global_interface::msg::DetectionArray detections);
         bool sphereNMS(std::vector<Armor> &armors);
     private:
         rclcpp::Time time_start_;
@@ -60,10 +63,10 @@ namespace perception_detector
         rclcpp::Publisher<DetectionArrayMsg>::SharedPtr perception_info_pub_;
     private:    
         // Params callback.
-        bool updateParams();
         // Subscribe img. 
         void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
         void postProcessCallback();
+        void depthaiNNCallback(const depthai_ros_msgs::msg::SpatialDetectionArray::SharedPtr spatial_detections);
         // Subscribe serial msg.
         Mutex msg_mutex_;
 
@@ -79,7 +82,7 @@ namespace perception_detector
         DebugParam debug_;
         rclcpp::TimerBase::SharedPtr postprocess_timer_;
         std::vector<std::unique_ptr<Detector>> detectors_;
-        bool initParams();
-
+        rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_robot_pub_;
+        rclcpp::Subscription<depthai_ros_msgs::msg::SpatialDetectionArray>::SharedPtr depthai_sub_;
     };
 } //namespace detector

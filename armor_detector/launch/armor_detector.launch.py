@@ -20,20 +20,20 @@ def generate_launch_description():
     params_path_l = os.path.join(share_path_usb, 'config', 'usb_left','params.yaml')
     params_path_r = os.path.join(share_path_usb, 'config', 'usb_right','params.yaml')
 
-    # ld.add_action(Node(
-    #     package='usb_cam', executable='usb_cam_node_exe', output='screen',
-    #     name="usb_cam_node_l",
-    #     parameters=[params_path_l],
-    #     remappings=[("image","/usb_left/image_raw"),
-    #                 ("camera_info","/usb_left/camera_info")]
-    #     ))
     ld.add_action(Node(
         package='usb_cam', executable='usb_cam_node_exe', output='screen',
-        name="usb_cam_node_r",
-        parameters=[params_path_r],
-        remappings=[("image","/usb_right/image_raw"),
-                    ("camera_info","/usb_right/camera_info")]
+        name="usb_cam_node_l",
+        parameters=[params_path_l],
+        remappings=[("image","/usb_left/image_raw"),
+                    ("camera_info","/usb_left/camera_info")]
         ))
+    # ld.add_action(Node(
+    #     package='usb_cam', executable='usb_cam_node_exe', output='screen',
+    #     name="usb_cam_node_r",
+    #     parameters=[params_path_r],
+    #     remappings=[("image","/usb_right/image_raw"),
+    #                 ("camera_info","/usb_right/camera_info")]
+    #     ))
     ld.add_action(Node(
         package = "perception_detector",
         name = 'perception_detector',

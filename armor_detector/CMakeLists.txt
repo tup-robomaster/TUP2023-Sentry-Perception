@@ -37,6 +37,7 @@ find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 # find_package(InferenceEngine REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(OpenVINO REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED COMPONENTS EigenSparse)
@@ -67,6 +68,7 @@ set(dependencies
   tf2
   tf2_geometry_msgs
   depthai_ros_msgs
+  visualization_msgs
   OpenVINO
   Ceres
   Eigen3

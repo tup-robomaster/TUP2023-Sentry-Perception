@@ -188,7 +188,6 @@ namespace perception_detector
                 RCLCPP_DEBUG_ONCE(logger_, "Show all armors...");
                 showArmors(src,armors);
             } 
-            
         }
         
         return true;

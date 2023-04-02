@@ -3,7 +3,6 @@
 using namespace std::placeholders;
 namespace perception_detector
 {
-
     DetectorNode::DetectorNode(const rclcpp::NodeOptions& options)
     : Node("perception_detector", options)
     {
@@ -22,7 +21,14 @@ namespace perception_detector
         
         // target info pub.
         std::string transport_type = this->declare_parameter("subscribe_compressed", false) ? "compressed" : "raw";
-        perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("/perception_info", qos);
+        perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("perception_info", qos);
+        vis_robot_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("perception_dector/visual_robot", qos);
+        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 50ms, std::bind(&DetectorNode::postProcessCallback, this));
+        
+        depthai_sub_ = this->create_subscription<depthai_ros_msgs::msg::SpatialDetectionArray>("color/yolov5", qos,
+                                                                                                std::bind(&DetectorNode::depthaiNNCallback, this, _1));
+
+
         // CameraType camera_num;
         std::cout<<path_params_.camera_param_path<<std::endl;
         YAML::Node config = YAML::LoadFile(path_params_.camera_param_path);
@@ -48,7 +54,6 @@ namespace perception_detector
             RCLCPP_INFO(this->get_logger(), "Registered callback for %s ...", key.c_str());
             ++it;
         }
-        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 100ms, std::bind(&DetectorNode::postProcessCallback, this));
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     }
@@ -71,7 +76,7 @@ namespace perception_detector
             {
                 auto first_element = detections_deque_.front();
                 auto duration = rclcpp::Duration(this->now() - rclcpp::Time(first_element.header.stamp));
-                if (duration < 70ms)
+                if (duration < 200ms)
                 {
                     break;
                 }
@@ -99,13 +104,23 @@ namespace perception_detector
                 for (auto armor : armors_tmp)
                     armors.push_back(armor);
             }
+            std::cout<<"armor_size bef:"<<armors.size()<<std::endl;
             sphereNMS(armors);
-            for (auto armor : armors)
+            if (!armors.empty())
             {
-                auto detection = armor2Detection(armor, detections_vec[0].header);
-                detections_msg.detections.push_back(detection);
+                for (auto armor : armors)
+                {
+                    auto detection = armor2Detection(armor, detections_vec[0].header);
+                    detections_msg.detections.push_back(detection);
+                }
+                visualization_msgs::msg::MarkerArray vis_array;
+                auto vis_markers = getvisRobotMarkers(detections_msg);
+                for (auto marker : vis_markers)
+                    vis_array.markers.push_back(marker);
+                vis_robot_pub_->publish(vis_array);
+                //Publish msg
+                perception_info_pub_->publish(detections_msg);
             }
-            perception_info_pub_->publish(detections_msg);
         }
     }
 
@@ -118,8 +133,81 @@ namespace perception_detector
         detection.center.position.x = armor.armor3d_cam[0];
         detection.center.position.y = armor.armor3d_cam[1];
         detection.center.position.z = armor.armor3d_cam[2];
+        // std::cout<<armor.rmat<<std::endl;
+        Eigen::Quaterniond quat(armor.rmat);
+        detection.center.orientation.x = quat.x();
+        detection.center.orientation.y = quat.y();
+        detection.center.orientation.z = quat.z();
+        detection.center.orientation.w = quat.w();
         // std::cout<<armor.key<<std::endl;
         return detection;
+    }
+
+    std::vector<visualization_msgs::msg::Marker> DetectorNode::getvisRobotMarkers
+                                    (global_interface::msg::DetectionArray detections)
+    {
+        std::vector<visualization_msgs::msg::Marker> vis_markers;
+        for (auto detection : detections.detections)
+        {
+            visualization_msgs::msg::Marker vis_marker;
+            visualization_msgs::msg::Marker vis_marker_text;
+            vis_marker.header = detections.header;
+            vis_marker.ns = detection.type + "_pos";
+            vis_marker.id = 0;
+            vis_marker.type = visualization_msgs::msg::Marker::SPHERE;
+            vis_marker.action = visualization_msgs::msg::Marker::ADD;
+            vis_marker.lifetime = rclcpp::Duration::from_seconds(1);
+            vis_marker.pose.position.x = detection.center.position.x;
+            vis_marker.pose.position.y = detection.center.position.y;
+            vis_marker.pose.position.z = detection.center.position.z;
+            vis_marker.pose.orientation.x = detection.center.orientation.x;
+            vis_marker.pose.orientation.y = detection.center.orientation.y;
+            vis_marker.pose.orientation.z = detection.center.orientation.z;
+            vis_marker.pose.orientation.w = detection.center.orientation.w;
+            vis_marker.scale.x = 0.5;
+            vis_marker.scale.y = 0.5;
+            vis_marker.scale.z = 0.5;
+            vis_marker.color.a = 1.0;
+
+            //Context will be different for marker and text marker below,copy here.
+            vis_marker_text = vis_marker;
+            vis_marker_text.ns = detection.type + "_label";
+            vis_marker_text.pose.position.z = vis_marker_text.pose.position.z + 0.5;
+            vis_marker_text.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+            vis_marker_text.text = detection.type;
+            vis_marker_text.color.r = 1.0;
+            vis_marker_text.color.g = 1.0;
+            vis_marker_text.color.b = 1.0;
+
+            if (detection.type[0] == 'R')
+            {
+                vis_marker.color.r = 1.0;
+                vis_marker.color.g = 0.2;
+                vis_marker.color.b = 0.2;
+            }
+            else if (detection.type[0] == 'B')
+            {
+                vis_marker.color.r = 0.2;
+                vis_marker.color.g = 0.2;
+                vis_marker.color.b = 1.0;
+            }
+            else if (detection.type[0] == 'N')
+            {
+                vis_marker.color.r = 1.0;
+                vis_marker.color.g = 1.0;
+                vis_marker.color.b = 1.0;
+            }
+            else if (detection.type[0] == 'P')
+            {
+                vis_marker.color.r = 1.0;
+                vis_marker.color.g = 0.0;
+                vis_marker.color.b = 1.0;
+            }
+
+            vis_markers.push_back(vis_marker);
+            vis_markers.push_back(vis_marker_text);
+        }
+        return vis_markers;
     }
 
     Armor DetectorNode::detection2Armor(global_interface::msg::Detection detection)
@@ -130,6 +218,11 @@ namespace perception_detector
         armor.armor3d_cam[0] = detection.center.position.x;
         armor.armor3d_cam[1] = detection.center.position.y;
         armor.armor3d_cam[2] = detection.center.position.z;
+        Eigen::Quaterniond quat(detection.center.orientation.w,
+                        detection.center.orientation.x,
+                        detection.center.orientation.y,
+                        detection.center.orientation.z);
+        armor.rmat = quat.toRotationMatrix();
         return armor;
     }
 
@@ -220,6 +313,77 @@ namespace perception_detector
      * @brief 图像数据回调
      * @param img_info 图像传感器数据
      */
+    void DetectorNode::depthaiNNCallback(const depthai_ros_msgs::msg::SpatialDetectionArray::SharedPtr spatial_detections)
+    {
+        if(!spatial_detections->detections.empty())
+        {                
+            
+            std_msgs::msg::Header header = spatial_detections->header;
+            //Offset to make it pass.
+            bool need_offset = (header.stamp.nanosec + 1e9 * 2e-1 < 1e9) ? false : true;
+            header.stamp.nanosec += 1e9 * 2e-1;
+            header.stamp.nanosec -= need_offset ? 1e9 : 0;
+            header.stamp.sec += need_offset ? 1 : 0;
+            global_interface::msg::DetectionArray detections;
+            detections.header = header;
+            detections.header.frame_id = "base_link";
+            geometry_msgs::msg::TransformStamped tf_msg;
+            try
+            {
+                tf_msg = tf_buffer_->lookupTransform(header.frame_id, "gimbal_yaw_frame", header.stamp,
+                                                                        rclcpp::Duration::from_seconds(0.1));
+            }
+            catch (const tf2::TransformException &ex)
+            {
+                RCLCPP_ERROR(this->get_logger(), "%s",ex.what());
+                return;
+            }
+            for (auto spatial_detection : spatial_detections->detections)
+            {
+                //Transform 36cls into 32cls
+                std::string color_str = "BRNP";
+                std::string cls_str = "012345677";
+                int class_id = std::atoi(spatial_detection.results[0].class_id.c_str());
+                std::string class_key = "N0";
+                class_key[0] = color_str[class_id / 9];
+                class_key[1] = cls_str[class_id % 9];
+
+                global_interface::msg::Detection detection;
+                detection.header = header;
+                detection.conf = spatial_detection.results[0].score;
+                detection.type = class_key;
+                detection.center.position = spatial_detection.position;
+                detection.center.orientation.x = 0.0;
+                detection.center.orientation.y = 0.0;
+                detection.center.orientation.z = 0.0;
+                detection.center.orientation.w = 1.0;
+
+                //Transform coord frame.
+                geometry_msgs::msg::PoseStamped pose, transformed_pose;
+                pose.header = detection.header;
+                pose.pose = detection.center;
+                try
+                {
+                    tf2::doTransform(pose, transformed_pose, tf_msg);
+                } catch (tf2::TransformException &ex) {
+                    RCLCPP_ERROR(this->get_logger(), "Transform failed: %s", ex.what());
+                    return;
+                }
+                detection.header.frame_id = "base_link";
+                detection.center = transformed_pose.pose;
+                detections.detections.push_back(detection);
+            }
+            detections_mutex_.lock();
+            detections_deque_.push_back(detections);
+            detections_mutex_.unlock();
+
+        }
+    }
+
+    /**
+     * @brief 图像数据回调
+     * @param img_info 图像传感器数据
+     */
     void DetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
     {
         auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
@@ -285,7 +449,6 @@ namespace perception_detector
         {
             RCLCPP_WARN(this->get_logger(), "Detected invalid frame_id for detect...");
         }
-
     }
 
     /**
