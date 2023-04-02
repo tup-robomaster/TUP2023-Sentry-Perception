@@ -35,7 +35,19 @@ namespace perception_detector
         const YAML::Node& top_node = config["cams"];
         // 获取本级列表并遍历所有元素
         YAML::const_iterator it = top_node.begin();
-        for (int i=0; i < top_node.size(); ++i)
+        std::vector<std::shared_future<bool>> detector_init_task;
+        auto init_func = [=](std::string camera_topic, std::string camera_info_path)
+                            {
+                                auto detector = std::make_unique<Detector>(path_params_, detector_params_, debug_);
+                                detector->setCameraIntrinsicsByYAML(camera_info_path);
+                                img_sub_.push_back(std::make_shared<image_transport::Subscriber>
+                                                    (image_transport::create_subscription(this, camera_topic,
+                                                    std::bind(&DetectorNode::imageCallback, this, _1), transport_type)));
+                                detectors_.push_back(std::move(detector));
+                                return true;
+                            };
+
+        for (int i = 0; i < top_node.size(); ++i)
         {
             // Get key name
             const std::string key = it->first.as<std::string>();
@@ -45,15 +57,14 @@ namespace perception_detector
             std::string camera_topic = sub_node["image_topic"].as<std::string>();
             std::string camera_frame = sub_node["frame_id"].as<std::string>();
             std::string camera_info_path = sub_node["camera_info_path"].as<std::string>();
-            auto detector = std::make_unique<Detector>(path_params_, detector_params_, debug_);
-            detector->setCameraIntrinsicsByYAML(camera_info_path);
-            img_sub_.push_back(std::make_shared<image_transport::Subscriber>(image_transport::create_subscription(this, camera_topic,
-                std::bind(&DetectorNode::imageCallback, this, _1), transport_type)));
             registered_cams.push_back(camera_frame);
-            detectors_.push_back(std::move(detector));
+            detector_init_task.push_back(std::async(std::launch::async, init_func, camera_topic, camera_info_path));
             RCLCPP_INFO(this->get_logger(), "Registered callback for %s ...", key.c_str());
             ++it;
         }
+        //Wait for detectors to init...
+        for (auto future : detector_init_task)
+            future.wait();
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     }
@@ -104,12 +115,13 @@ namespace perception_detector
                 for (auto armor : armors_tmp)
                     armors.push_back(armor);
             }
-            std::cout<<"armor_size bef:"<<armors.size()<<std::endl;
             sphereNMS(armors);
             if (!armors.empty())
             {
                 for (auto armor : armors)
                 {
+                    RCLCPP_INFO(this->get_logger(), "Detected %s @ %f, %f, %f",
+                                armor.key.c_str(), armor.armor3d_cam[0], armor.armor3d_cam[1], armor.armor3d_cam[2]);
                     auto detection = armor2Detection(armor, detections_vec[0].header);
                     detections_msg.detections.push_back(detection);
                 }

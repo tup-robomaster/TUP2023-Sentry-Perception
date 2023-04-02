@@ -227,7 +227,6 @@ namespace perception_detector
 
     bool Detector::setCameraIntrinsicsByYAML(const std::string& yaml_file_path)
     {
-        std::cout<<"yaml:"<<yaml_file_path<<std::endl;
         // Load camera intrinsics from YAML file
         YAML::Node config = YAML::LoadFile(yaml_file_path);
 
