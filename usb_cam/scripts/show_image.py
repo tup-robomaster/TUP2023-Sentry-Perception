@@ -45,7 +45,7 @@ class ExamineImage(Node):
         self.mat = None
         self.sub = self.create_subscription(
             Image,
-            'image',
+            'image_raw',
             self.image_callback,
             100)
 

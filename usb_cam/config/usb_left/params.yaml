@@ -4,9 +4,18 @@
       framerate: 30.0
       io_method: "mmap"
       frame_id: "usb_left_frame"
-      pixel_format: "yuyv"
+      pixel_format: "mjpeg2rgb"
       color_format: "yuv422p"
       image_width: 640
       image_height: 480
       camera_name: "usb_left"
       camera_info_url: "package://usb_cam/config/usb_left/camera_info.yaml"
+      brightness: -1
+      contrast: -1
+      saturation: -1
+      sharpness: -1
+      gain: -1
+      auto_white_balance: true
+      white_balance: 4000
+      autoexposure: true
+      exposure: 100

@@ -1,15 +1,14 @@
 /**:
     ros__parameters:
-      video_device: "/dev/video2"
+      video_device: "/dev/video0"
       framerate: 30.0
       io_method: "mmap"
-      frame_id: "usb_right_frame"
-      pixel_format: "mjpeg2rgb"
-      color_format: "yuv422p"
+      frame_id: "camera"
+      pixel_format: "mjpeg2rgb"  # see usb_cam/supported_formats for list of supported formats
       image_width: 640
       image_height: 480
-      camera_name: "usb_right"
-      camera_info_url: "package://usb_cam/config/usb_right/camera_info.yaml"
+      camera_name: "test_camera"
+      camera_info_url: "package://usb_cam/config/camera_info.yaml"
       brightness: -1
       contrast: -1
       saturation: -1
@@ -19,3 +18,5 @@
       white_balance: 4000
       autoexposure: true
       exposure: 100
+      autofocus: false
+      focus: -1
