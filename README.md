@@ -21,29 +21,29 @@
 |**/visual_robot**|visualization_msgs/MarkerArray|车辆感知结果可视化Topic|
 
 ## 2. 项目结构
-├── perception_detector
-│   ├── CMakeLists.txt //CMake文件
-│   ├── config
-│   │   └── config.yaml //相机参数配置文件
-│   ├── include
-│   │   ├── armor_detector
-│   │   │   └── armor_detector.hpp //装甲板检测头文件
-│   │   ├── detector_node.hpp //感知节点头文件
-│   │   └── inference
-│   │       └── inference_api2.hpp //CNN推理头文件
-│   ├── launch
-│   │   └── armor_detector.launch.py //launch文件
-│   ├── model: //存放CNN模型权重文件
-│   ├── package.xml //package描述文件
-│   └── src
-│       ├── armor_detector
-│       │   └── armor_detector.cpp //装甲板检测cpp文件
-│       ├── detector_node.cpp //感知节点cpp文件
-│       └── inference
-│           └── inference_api2.cpp //CNN推理头文件
-├── pic: //存放文档图片
-├── README.md
-└── usb_cam: //usb-cam库
+├── perception_detector  
+│   ├── CMakeLists.txt //CMake文件  
+│   ├── config  
+│   │   └── config.yaml //相机参数配置文件  
+│   ├── include  
+│   │   ├── armor_detector  
+│   │   │   └── armor_detector.hpp //装甲板检测头文件  
+│   │   ├── detector_node.hpp //感知节点头文件  
+│   │   └── inference  
+│   │       └── inference_api2.hpp //CNN推理头文件  
+│   ├── launch  
+│   │   └── armor_detector.launch.py //launch文件  
+│   ├── model: //存放CNN模型权重文件  
+│   ├── package.xml //package描述文件  
+│   └── src  
+│       ├── armor_detector  
+│       │   └── armor_detector.cpp //装甲板检测cpp文件  
+│       ├── detector_node.cpp //感知节点cpp文件  
+│       └── inference  
+│           └── inference_api2.cpp //CNN推理头文件  
+├── pic: //存放文档图片  
+├── README.md  
+└── usb_cam: //usb-cam库  
 
 ## 3.算法流程
 算法示意图如下:
