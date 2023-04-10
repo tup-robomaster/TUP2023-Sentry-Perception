@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(perception_detector)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic -O3)
 endif()
 
 # Default to C++14
@@ -128,7 +128,7 @@ target_link_libraries(${PROJECT_NAME}_node
   openvino::runtime 
   ${Eigen3_LIBRARIES}
 
-  yaml-cpp.so 
+  yaml-cpp
   # fmt.so
 )
 

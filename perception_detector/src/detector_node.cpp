@@ -12,18 +12,21 @@ namespace perception_detector
         img_sub_.clear();
         //QoS    
         rclcpp::QoS qos(0);
-        qos.keep_last(5);
+        qos.keep_last(1);
         qos.best_effort();
         qos.reliable();
         qos.durability();
         // qos.transient_local();
         qos.durability_volatile();
         
+        rmw_qos_profile_t rmw_qos(rmw_qos_profile_default);
+        rmw_qos.depth = 1;
+
         // target info pub.
         std::string transport_type = this->declare_parameter("subscribe_compressed", false) ? "compressed" : "raw";
-        perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("perception_info", qos);
-        vis_robot_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("perception_dector/visual_robot", qos);
-        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 50ms, std::bind(&DetectorNode::postProcessCallback, this));
+        perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("perception_detector/perception_array", qos);
+        vis_robot_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("perception_detector/visual_robot", qos);
+        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 100ms, std::bind(&DetectorNode::postProcessCallback, this));
         
         depthai_sub_ = this->create_subscription<depthai_ros_msgs::msg::SpatialDetectionArray>("color/yolov5", qos,
                                                                                                 std::bind(&DetectorNode::depthaiNNCallback, this, _1));
@@ -42,7 +45,7 @@ namespace perception_detector
                                 detector->setCameraIntrinsicsByYAML(camera_info_path);
                                 img_sub_.push_back(std::make_shared<image_transport::Subscriber>
                                                     (image_transport::create_subscription(this, camera_topic,
-                                                    std::bind(&DetectorNode::imageCallback, this, _1), transport_type)));
+                                                    std::bind(&DetectorNode::imageCallback, this, _1), transport_type, rmw_qos)));
                                 detectors_.push_back(std::move(detector));
                                 return true;
                             };
@@ -77,6 +80,7 @@ namespace perception_detector
     {
         std::vector<global_interface::msg::DetectionArray> detections_vec;
         detections_mutex_.lock();
+        std::cout<<"vecsize1:"<<detections_deque_.size()<<std::endl;
         if (!detections_deque_.empty())
         {  
             std::sort(detections_deque_.begin(), detections_deque_.end(), [](const global_interface::msg::DetectionArray& a,
@@ -87,7 +91,7 @@ namespace perception_detector
             {
                 auto first_element = detections_deque_.front();
                 auto duration = rclcpp::Duration(this->now() - rclcpp::Time(first_element.header.stamp));
-                if (duration < 200ms)
+                if (duration < 300ms)
                 {
                     break;
                 }
@@ -103,7 +107,6 @@ namespace perception_detector
             detections_vec.push_back(detections);
         }
         detections_mutex_.unlock();
-
         if (!detections_vec.empty())
         {
             global_interface::msg::DetectionArray detections_msg;
@@ -332,8 +335,8 @@ namespace perception_detector
             
             std_msgs::msg::Header header = spatial_detections->header;
             //Offset to make it pass.
-            bool need_offset = (header.stamp.nanosec + 1e9 * 2e-1 < 1e9) ? false : true;
-            header.stamp.nanosec += 1e9 * 2e-1;
+            bool need_offset = (header.stamp.nanosec + 1e9 * 1e-1 < 1e9) ? false : true;
+            header.stamp.nanosec += 1e9 * 1e-1;
             header.stamp.nanosec -= need_offset ? 1e9 : 0;
             header.stamp.sec += need_offset ? 1 : 0;
             global_interface::msg::DetectionArray detections;
@@ -342,7 +345,7 @@ namespace perception_detector
             geometry_msgs::msg::TransformStamped tf_msg;
             try
             {
-                tf_msg = tf_buffer_->lookupTransform(header.frame_id, "gimbal_yaw_frame", header.stamp,
+                tf_msg = tf_buffer_->lookupTransform("base_link", header.frame_id, header.stamp,
                                                                         rclcpp::Duration::from_seconds(0.1));
             }
             catch (const tf2::TransformException &ex)
@@ -412,7 +415,7 @@ namespace perception_detector
                 geometry_msgs::msg::TransformStamped tf_msg;
                 try
                 {
-                    tf_msg = tf_buffer_->lookupTransform(frame_id, "gimbal_yaw_frame", img_info->header.stamp,
+                    tf_msg = tf_buffer_->lookupTransform("base_link", frame_id, img_info->header.stamp,
                                                                          rclcpp::Duration::from_seconds(0.1));
                 }
                 catch (const tf2::TransformException &ex)

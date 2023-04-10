@@ -15,6 +15,7 @@
   <depend>message_filters</depend>
   <depend>image_transport</depend>
   <depend>sensor_msgs</depend>
+  <depend>depthai_ros_msgs</depend>
   <depend>global_user</depend>
   <depend>global_interface</depend>
 
