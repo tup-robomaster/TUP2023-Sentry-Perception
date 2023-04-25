@@ -17,5 +17,5 @@
       gain: -1
       auto_white_balance: true
       white_balance: 4000
-      autoexposure: true
-      exposure: 100
+      autoexposure: false
+      exposure: 500

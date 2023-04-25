@@ -32,6 +32,7 @@ namespace perception_detector
                                                                                                 std::bind(&DetectorNode::depthaiNNCallback, this, _1));
 
 
+        // CameraType camera_num;
         std::cout<<path_params_.camera_param_path<<std::endl;
         YAML::Node config = YAML::LoadFile(path_params_.camera_param_path);
         const YAML::Node& top_node = config["cams"];
@@ -71,22 +72,15 @@ namespace perception_detector
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     }
 
-    /** 
-     * @brief 析构函数
-    */
     DetectorNode::~DetectorNode()
     {
        
     }
-
-    /**
-     * @brief 后处理回调函数，对识别装甲板结果进行NMS，发布最终消息
-    */
     void DetectorNode::postProcessCallback()
     {
         std::vector<global_interface::msg::DetectionArray> detections_vec;
         detections_mutex_.lock();
-        std::cout<<"vecsize1:"<<detections_deque_.size()<<std::endl;
+        // std::cout<<"vecsize1:"<<detections_deque_.size()<<std::endl;
         if (!detections_deque_.empty())
         {  
             std::sort(detections_deque_.begin(), detections_deque_.end(), [](const global_interface::msg::DetectionArray& a,
@@ -116,7 +110,7 @@ namespace perception_detector
         if (!detections_vec.empty())
         {
             global_interface::msg::DetectionArray detections_msg;
-            detections_msg.header= detections_vec[0].header;
+            detections_msg.header= detections_vec.back().header;
             std::vector<Armor> armors;
             for (auto detections : detections_vec)
             {
@@ -124,7 +118,6 @@ namespace perception_detector
                 for (auto armor : armors_tmp)
                     armors.push_back(armor);
             }
-            //进行NMS
             sphereNMS(armors);
             if (!armors.empty())
             {
@@ -132,7 +125,7 @@ namespace perception_detector
                 {
                     RCLCPP_INFO(this->get_logger(), "Detected %s @ %f, %f, %f",
                                 armor.key.c_str(), armor.armor3d_cam[0], armor.armor3d_cam[1], armor.armor3d_cam[2]);
-                    auto detection = armor2Detection(armor, detections_vec[0].header);
+                    auto detection = armor2Detection(armor, detections_msg.header);
                     detections_msg.detections.push_back(detection);
                 }
                 visualization_msgs::msg::MarkerArray vis_array;
@@ -146,12 +139,25 @@ namespace perception_detector
         }
     }
 
+    global_interface::msg::Detection DetectorNode::armor2Detection(Armor armor, std_msgs::msg::Header header)
+    {
+        global_interface::msg::Detection detection;
+        detection.header = header;
+        detection.conf = armor.conf;
+        detection.type = armor.key;
+        detection.center.position.x = armor.armor3d_cam[0];
+        detection.center.position.y = armor.armor3d_cam[1];
+        detection.center.position.z = armor.armor3d_cam[2];
+        // std::cout<<armor.rmat<<std::endl;
+        Eigen::Quaterniond quat(armor.rmat);
+        detection.center.orientation.x = quat.x();
+        detection.center.orientation.y = quat.y();
+        detection.center.orientation.z = quat.z();
+        detection.center.orientation.w = quat.w();
+        // std::cout<<armor.key<<std::endl;
+        return detection;
+    }
 
-    /**
-     * @brief 将DetectionArray转化为可进行可视化的Marker
-     * @param detections 检测结果
-     * @return std::vector<visualization_msgs::msg::Marker> 转化完成的Marker构成的vector
-     **/
     std::vector<visualization_msgs::msg::Marker> DetectorNode::getvisRobotMarkers
                                     (global_interface::msg::DetectionArray detections)
     {
@@ -203,39 +209,22 @@ namespace perception_detector
             else if (detection.type[0] == 'N')
             {
                 vis_marker.color.r = 1.0;
-                vis_marker.color.g = 1.0;std::vector<visualization_msgs::msg::Marker>
+                vis_marker.color.g = 1.0;
+                vis_marker.color.b = 1.0;
+            }
+            else if (detection.type[0] == 'P')
+            {
+                vis_marker.color.r = 1.0;
+                vis_marker.color.g = 0.0;
+                vis_marker.color.b = 1.0;
+            }
+
+            vis_markers.push_back(vis_marker);
+            vis_markers.push_back(vis_marker_text);
+        }
+        return vis_markers;
     }
 
-    /**
-     * @brief 将装甲板转化为Detection msg
-     * @param armor 装甲板
-     * @param header 消息header
-     * @return global_interface::msg::Detection 转化完成的Detection msg
-    */
-    global_interface::msg::Detection DetectorNode::armor2Detection(Armor armor, std_msgs::msg::Header header)
-    {
-        global_interface::msg::Detection detection;
-        detection.header = header;
-        detection.conf = armor.conf;
-        detection.type = armor.key;
-        detection.center.position.x = armor.armor3d_cam[0];
-        detection.center.position.y = armor.armor3d_cam[1];
-        detection.center.position.z = armor.armor3d_cam[2];
-        // std::cout<<armor.rmat<<std::endl;
-        Eigen::Quaterniond quat(armor.rmat);
-        detection.center.orientation.x = quat.x();
-        detection.center.orientation.y = quat.y();
-        detection.center.orientation.z = quat.z();
-        detection.center.orientation.w = quat.w();
-        // std::cout<<armor.key<<std::endl;
-        return detection;
-    }
-
-    /**
-     * @brief 将Detection msg转化为装甲板
-     * @param detection Detection msg
-     * @return Armor 转化完成的Armor
-    */
     Armor DetectorNode::detection2Armor(global_interface::msg::Detection detection)
     {
         Armor armor;
@@ -252,11 +241,6 @@ namespace perception_detector
         return armor;
     }
 
-    /**
-     * @brief 将DetectionArray转化为装甲板vector
-     * @param detections DetectionArmor msg
-     * @return std::vector<Armor> 转化完成的Armor vecotr
-    */
     std::vector<Armor> DetectorNode::detectionArray2Armors(global_interface::msg::DetectionArray detections)
     {
         std::vector<Armor> armors;
@@ -270,11 +254,6 @@ namespace perception_detector
 
     }
 
-    /** 
-     * @brief 装甲板NMS，原地操作
-     * @param armors 装甲板vecotr
-     * @return bool 是否转化完成
-    */
     bool DetectorNode::sphereNMS(std::vector<Armor> &armors)
     {
         //First Stage NMS:Armor
@@ -346,8 +325,8 @@ namespace perception_detector
     }
 
     /**
-     * @brief OAK板载神经网络检测结果回调函数
-     * @param spatial_detections OAK检测结果
+     * @brief 图像数据回调
+     * @param img_info 图像传感器数据
      */
     void DetectorNode::depthaiNNCallback(const depthai_ros_msgs::msg::SpatialDetectionArray::SharedPtr spatial_detections)
     {
@@ -475,8 +454,8 @@ namespace perception_detector
                 if(debug_.show_img)
                 {
                     // RCLCPP_INFO(this->get_logger(), "show img...");
-                    cv::namedWindow(frame_id, cv::WINDOW_AUTOSIZE);
-                    cv::imshow(frame_id, img);
+                    cv::namedWindow(frame_id + "_detect", cv::WINDOW_AUTOSIZE);
+                    cv::imshow(frame_id + "_detect", img);
                     cv::waitKey(1);
                 }
             }

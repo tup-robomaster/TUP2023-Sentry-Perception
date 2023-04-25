@@ -112,10 +112,11 @@ namespace perception_detector
             auto apex_wh_ratio = max(points_pic_rrect.size.height, points_pic_rrect.size.width) /
                                     min(points_pic_rrect.size.height, points_pic_rrect.size.width);
             //若大于长宽阈值或为哨兵、英雄装甲板
-            if (object.cls == 1 || object.cls == 0)
+            if (object.cls == 1)
                 target_type = BIG;
             //FIXME：若存在平衡步兵需要对此处步兵装甲板类型进行修改
-            else if (object.cls == 2 || object.cls == 3 || object.cls == 4 || object.cls == 5 || object.cls == 6)
+            else if (object.cls == 0 || object.cls == 2 || object.cls == 3 ||
+                         object.cls == 4 || object.cls == 5 || object.cls == 6)
                 target_type = SMALL;
             else if(apex_wh_ratio > detector_params_.armor_type_wh_thres)
                 target_type = BIG;
@@ -159,7 +160,7 @@ namespace perception_detector
             cv2eigen(tvec, tvec_eigen);
 
             //防止装甲板类型出错导致解算问题，首先尝试切换装甲板类型，若仍无效则直接跳过该装甲板
-            if (tvec_eigen.norm() > 5 ||
+            if (tvec_eigen.norm() > 8 ||
                 isnan(tvec_eigen[0]) ||
                 isnan(tvec_eigen[1]) ||
                 isnan(tvec_eigen[2]))

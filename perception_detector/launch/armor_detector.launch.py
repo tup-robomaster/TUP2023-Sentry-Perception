@@ -21,29 +21,32 @@ def generate_launch_description():
     params_path_r = os.path.join(share_path_usb, 'config', 'usb_right','params.yaml')
     
     ld.add_action(Node(
-        package='usb_cam', executable='usb_cam_node_exe', output='screen',
+        package='usb_cam', executable='usb_cam_node_exe', output="log",
         name="usb_cam_node_l",
         parameters=[params_path_l],
         remappings=[("image_raw","/usb_left/image_raw"),
-                    ("camera_info","/usb_left/camera_info")]
+                    ("camera_info","/usb_left/camera_info")],
+        respawn=True
         ))
     ld.add_action(Node(
-        package='usb_cam', executable='usb_cam_node_exe', output='screen',
+        package='usb_cam', executable='usb_cam_node_exe', output="log",
         name="usb_cam_node_r",
         parameters=[params_path_r],
         remappings=[("image_raw","/usb_right/image_raw"),
-                    ("camera_info","/usb_right/camera_info")]
+                    ("camera_info","/usb_right/camera_info")],
+        respawn=True
         ))
     ld.add_action(Node(
         package = "perception_detector",
         name = 'perception_detector',
         executable = 'perception_detector_node',
-        output = 'screen'
+        output="log",
+        respawn=True
     ))
     # ld.add_action(ComposableNodeContainer(
     #         name='perception_detector_container',
     #         namespace='',
-    #         output='screen',
+    #         output="log",
     #         package='rclcpp_components',
     #         executable='component_container',
     #         composable_node_descriptions=[

@@ -56,14 +56,14 @@ def generate_launch_description():
     node_name = args.node_name
 
     ld.add_action(Node(
-        package='usb_cam', executable='usb_cam_node_exe', output='screen',
+        package='usb_cam', executable='usb_cam_node_exe', output="log",
         name="usb_cam_node_r",
         parameters=[params_path_r],
         remappings=[("image","/usb_right/image_raw"),
                     ("camera_info","/usb_right/camera_info")]
         ))
     ld.add_action(Node(
-        package='usb_cam', executable='usb_cam_node_exe', output='screen',
+        package='usb_cam', executable='usb_cam_node_exe', output="log",
         name="usb_cam_node_l",
         parameters=[params_path_l],
         remappings=[("image","/usb_left/image_raw"),
