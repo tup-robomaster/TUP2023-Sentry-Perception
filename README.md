@@ -48,5 +48,23 @@
 ## 3.算法流程
 算法示意图如下:
 <img src="pic/architecture.png"/>
-程序将订阅相关topic，接收USB相机采集的图像，为每个相机分配一个CNN推理实例，并进行CNN模板检测，搭载有板载推理芯片的OAK深度相机则会被分配到一个Adapter来对其推理结果转化。推理与转换完成后这些推理结果将会经历TF坐标变换，均被转化至统一的base_link系下并被存入buffer以供后处理。
+程序将订阅相关topic，接收USB相机采集的图像，为每个相机分配一个CNN推理实例，并进行CNN模板检测，搭载有板载推理芯片的OAK深度相机则会被分配到一个Adapter来对其推理结果转化。推理与转换完成后这些推理结果将会经历TF坐标变换，均被转化至统一的base_link系下并被存入buffer以供后处理。  
+
 后处理函数将以20hz的频率被调用，后处理函数将从buffer中提取出一定时间范围内的装甲板检测信息，并对这些检测结果进行两层NMS处理。第一层NMS处理依据检测到装甲板间的三维距离进行，主要用于去除重复装甲板，并保存个装甲板实例的重叠同类别装甲板数;第二层NMS先按重叠同类别装甲板数对第一次结果进行排序，再次按类别进行NMS，确保无误识别与同类别车辆出现多次的情况。经过上述处理后我们已经得到了周围车辆的检测结果，这些信息会以检测结果与可视化消息的形式发布。
+
+
+## 4.使用教程
+### 4.1 配置usb_cam
+打开`usb_cam/config`,在该文件夹下新建你自己的相机配置文件夹，并添加以下文件:
+- `camera_info.yaml`: 相机内参
+- `params.yaml`: 相机配置参数
+### 4.2 配置perception_detector
+打开`perception_detector/config/config.yaml`,为你的相机添加类似配置
+```yaml
+    usb_left: 
+      image_topic: /usb_left/image_raw #相机topic
+      frame_id: "usb_left_frame" #相机的frame_id，后续用来进行多相机NMS.
+      camera_info_path: /home/tup/ros2_ws/src/TUP2023-Sentry-Framework/TUP2023-Sentry-Perception/usb_cam/config/usb_left/camera_info.yaml #相机内参文件路径
+```
+### 4.3 配置launch文件
+在launch文件中为你的相机新增节点以启动相机
