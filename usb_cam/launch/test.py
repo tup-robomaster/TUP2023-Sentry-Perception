@@ -23,7 +23,7 @@ def generate_launch_description():
         output = "screen"
     )
     show_image = Node(
-        package='usb_cam', executable='show_image.py', output='screen',
+        package='usb_cam', executable='show_image.py', output="log",
         # namespace='usb_cam',
         # arguments=[image_manip_dir + "/data/mosaic.jpg"]),
         # remappings=[('image_raw', 'image_raw')]
@@ -37,7 +37,7 @@ def generate_launch_description():
         # remappings=[('image_raw', 'image_raw2')]
     )
     show_image2 = Node(
-        package='usb_cam', executable='show_image2.py', output='screen',
+        package='usb_cam', executable='show_image2.py', output="log",
         # namespace='usb_cam2',
         # arguments=[image_manip_dir + "/data/mosaic.jpg"])
         # remappings=[('image_raw', 'image_raw2')]
