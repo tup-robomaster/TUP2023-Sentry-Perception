@@ -28,8 +28,6 @@ namespace perception_detector
         vis_robot_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("perception_detector/visual_robot", qos);
         postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 100ms, std::bind(&DetectorNode::postProcessCallback, this));
         
-        depthai_sub_ = this->create_subscription<depthai_ros_msgs::msg::SpatialDetectionArray>("color/yolov5", qos,
-                                                                                                std::bind(&DetectorNode::depthaiNNCallback, this, _1));
 
 
         // CameraType camera_num;
@@ -322,77 +320,6 @@ namespace perception_detector
         }
         armors = second_nms_out;
         return true;
-    }
-
-    /**
-     * @brief 图像数据回调
-     * @param img_info 图像传感器数据
-     */
-    void DetectorNode::depthaiNNCallback(const depthai_ros_msgs::msg::SpatialDetectionArray::SharedPtr spatial_detections)
-    {
-        if(!spatial_detections->detections.empty())
-        {                
-            
-            std_msgs::msg::Header header = spatial_detections->header;
-            //Offset to make it pass.
-            bool need_offset = (header.stamp.nanosec + 1e9 * 1e-1 < 1e9) ? false : true;
-            header.stamp.nanosec += 1e9 * 1e-1;
-            header.stamp.nanosec -= need_offset ? 1e9 : 0;
-            header.stamp.sec += need_offset ? 1 : 0;
-            global_interface::msg::DetectionArray detections;
-            detections.header = header;
-            detections.header.frame_id = "base_link";
-            geometry_msgs::msg::TransformStamped tf_msg;
-            try
-            {
-                tf_msg = tf_buffer_->lookupTransform("base_link", header.frame_id, header.stamp,
-                                                                        rclcpp::Duration::from_seconds(0.1));
-            }
-            catch (const tf2::TransformException &ex)
-            {
-                RCLCPP_ERROR(this->get_logger(), "%s",ex.what());
-                return;
-            }
-            for (auto spatial_detection : spatial_detections->detections)
-            {
-                //Transform 36cls into 32cls
-                std::string color_str = "BRNP";
-                std::string cls_str = "012345677";
-                int class_id = std::atoi(spatial_detection.results[0].class_id.c_str());
-                std::string class_key = "N0";
-                class_key[0] = color_str[class_id / 9];
-                class_key[1] = cls_str[class_id % 9];
-
-                global_interface::msg::Detection detection;
-                detection.header = header;
-                detection.conf = spatial_detection.results[0].score;
-                detection.type = class_key;
-                detection.center.position = spatial_detection.position;
-                detection.center.orientation.x = 0.0;
-                detection.center.orientation.y = 0.0;
-                detection.center.orientation.z = 0.0;
-                detection.center.orientation.w = 1.0;
-
-                //Transform coord frame.
-                geometry_msgs::msg::PoseStamped pose, transformed_pose;
-                pose.header = detection.header;
-                pose.pose = detection.center;
-                try
-                {
-                    tf2::doTransform(pose, transformed_pose, tf_msg);
-                } catch (tf2::TransformException &ex) {
-                    RCLCPP_ERROR(this->get_logger(), "Transform failed: %s", ex.what());
-                    return;
-                }
-                detection.header.frame_id = "base_link";
-                detection.center = transformed_pose.pose;
-                detections.detections.push_back(detection);
-            }
-            detections_mutex_.lock();
-            detections_deque_.push_back(detections);
-            detections_mutex_.unlock();
-
-        }
     }
 
     /**

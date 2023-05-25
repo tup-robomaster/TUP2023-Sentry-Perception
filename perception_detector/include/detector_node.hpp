@@ -13,10 +13,6 @@
 #include <image_transport/subscriber_filter.hpp>
 #include <cv_bridge/cv_bridge.h>
 
-//depthai msgs
-#include <depthai_ros_msgs/msg/spatial_detection_array.hpp>
-#include <depthai_ros_msgs/msg/spatial_detection.hpp>
-
 //tf2
 #include <tf2/transform_datatypes.h>
 #include <tf2_eigen/tf2_eigen.h>
@@ -66,7 +62,6 @@ namespace perception_detector
         // Subscribe img. 
         void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
         void postProcessCallback();
-        void depthaiNNCallback(const depthai_ros_msgs::msg::SpatialDetectionArray::SharedPtr spatial_detections);
         // Subscribe serial msg.
         Mutex msg_mutex_;
 
@@ -83,6 +78,5 @@ namespace perception_detector
         rclcpp::TimerBase::SharedPtr postprocess_timer_;
         std::vector<std::unique_ptr<Detector>> detectors_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_robot_pub_;
-        rclcpp::Subscription<depthai_ros_msgs::msg::SpatialDetectionArray>::SharedPtr depthai_sub_;
     };
 } //namespace detector

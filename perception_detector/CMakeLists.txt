@@ -31,7 +31,6 @@ find_package(OpenCV REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
-find_package(depthai_ros_msgs REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -67,7 +66,6 @@ set(dependencies
   tf2_ros
   tf2
   tf2_geometry_msgs
-  depthai_ros_msgs
   visualization_msgs
   OpenVINO
   Ceres
