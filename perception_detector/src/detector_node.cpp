@@ -59,7 +59,7 @@ namespace perception_detector
             std::string camera_frame = sub_node["frame_id"].as<std::string>();
             std::string camera_info_path = sub_node["camera_info_path"].as<std::string>();
             registered_cams.push_back(camera_frame);
-            detector_init_task.push_back(std::async(std::launch::async, init_func, camera_topic, camera_info_path));
+            detector_init_task.push_back(std::async(std::launch::deferred, init_func, camera_topic, camera_info_path));
             RCLCPP_INFO(this->get_logger(), "Registered callback for %s ...", key.c_str());
             ++it;
         }
@@ -72,7 +72,7 @@ namespace perception_detector
 
     DetectorNode::~DetectorNode()
     {
-       
+       detectors_.clear();
     }
     void DetectorNode::postProcessCallback()
     {
@@ -407,7 +407,7 @@ namespace perception_detector
         this->declare_parameter<double>("armor_conf_high_thres", 0.82);
         
         this->declare_parameter("camera_param_path", "/config/config.yaml");
-        this->declare_parameter("network_path", "/model/opt-0527-002.xml");
+        this->declare_parameter("network_path", "/model/vgg_416.onnx");
         //Debug.
         this->declare_parameter("show_aim_cross", false);
         this->declare_parameter("show_img", true);

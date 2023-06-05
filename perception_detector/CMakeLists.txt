@@ -5,28 +5,27 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O3)
 endif()
 
-# Default to C++14
-# if(NOT CMAKE_CXX_STANDARD)
-#   set(CMAKE_CXX_STANDARD 14)
-#   set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# endif()
-  
-# set(CMAKE_CXX_STANDARD 17)
-# set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --std=c++17 -Os -pthread -g")
+option(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
+add_compile_options(-std=c++17)
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-z,stack-size=16000000")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -O3  -Wall -fopenmp")
+set(CUDA_STANDARD 14)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+set(CUDA_GEN_CODE "-gencode=arch=compute_75,code=sm_75")
+set(CMAKE_CUDA_ARCHITECTURES 75)
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}  -std=c++14 -O3 -Xcompiler -fPIC -g -w ${CUDA_GEN_CODE}")
 
-# set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-# set(CMAKE_C_VISIBILITY_PRESET default)
-# set(CMAKE_CXX_VISIBILITY_PRESET default)
-# set(CMAKE_VISIBILITY_INLINES_HIDDEN OFF)
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-# set(CMAKE_PREFIX_PATH /opt/intel/openvino_2021/deployment_tools/inference_engine/share)
-
-# find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclpy REQUIRED)
+find_package(CUDA REQUIRED)
+find_package(CUDNN REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -35,52 +34,46 @@ find_package(message_filters REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(global_interface REQUIRED)
 # find_package(InferenceEngine REQUIRED)
 find_package(visualization_msgs REQUIRED)
-find_package(OpenVINO REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Ceres REQUIRED COMPONENTS EigenSparse)
 find_package(yaml-cpp REQUIRED)
 # find_package(fmt REQUIRED)
 
-# custom package
-find_package(global_user REQUIRED)
-find_package(global_interface REQUIRED)
-find_package(PkgConfig REQUIRED)
 include_directories(
-  include
+  ${PROJECT_SOURCE_DIR}/include
+  ${CUDA_INCLUDE_DIRS}
+  ${CUDNN_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
-  # ${InferenceEngine_INCLUDE_DIRS}
-  ${OpenVINO_INCLUDE_DIRS}
 )
 
 set(dependencies 
   rclcpp
+  rclcpp_components
   rclpy
   OpenCV 
   message_filters 
   image_transport
+  global_interface
   sensor_msgs
-  # InferenceEngine 
-  tf2_ros
-  tf2
-  tf2_geometry_msgs
-  visualization_msgs
-  OpenVINO
-  Ceres
+  CUDA
+  CUDNN
   Eigen3
   cv_bridge
-  yaml-cpp 
-  # fmt
-
-  global_interface
-  global_user
+  yaml-cpp
+  visualization_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
 )
   
-add_library(${PROJECT_NAME} SHARED
-  src/inference/inference_api2.cpp
+cuda_add_library(${PROJECT_NAME} SHARED
   src/armor_detector/armor_detector.cpp
+  src/TRTInfer/Inference.cpp
+  src/TRTInfer/preprocess.cu
   src/detector_node.cpp
 )
   
@@ -89,7 +82,14 @@ ament_target_dependencies(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME}
-  openvino::runtime 
+  ${OpenCV_LIBRARIES}
+  ${Eigen3_LIBRARIES}
+  ${CUDA_LIBRARIES}
+  ${CUDNN_LIBRARIES}
+  nvinfer
+  cudart
+  nvonnxparser
+  yaml-cpp
 )
 
 target_compile_definitions(${PROJECT_NAME}
@@ -100,34 +100,26 @@ target_compile_definitions(${PROJECT_NAME}
 # target_compile_definitions(${PROJECT_NAME}
 # PRIVATE "COMPOSITION_BUILDING_DLL")
   
-add_executable(${PROJECT_NAME}_node
-  # ./include/armor_detector/inference.h 
-  # include/armor_detector/inference_api2.hpp
-  # ./include/armor_detector/spinning_detector.hpp
+cuda_add_executable(${PROJECT_NAME}_node
   src/armor_detector/armor_detector.cpp 
-  src/inference/inference_api2.cpp
+  src/TRTInfer/Inference.cpp
+  src/TRTInfer//preprocess.cu
   src/detector_node.cpp 
 )
 
-# add_executable(testing
-#   # ./include/armor_detector/inference.h
-#   # ./src/armor_detector/inference.cpp
-#   ./src/test/test.cpp 
-# )
-
+set_target_properties(PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 ament_target_dependencies(${PROJECT_NAME}_node
   ${dependencies}
 )
-
 target_link_libraries(${PROJECT_NAME}_node
-  # ${PROJECT_NAME}
   ${OpenCV_LIBRARIES}
-  # ${InferenceEngine_LIBRARIES}
-  openvino::runtime 
   ${Eigen3_LIBRARIES}
-
+  ${CUDA_LIBRARIES}
+  ${CUDNN_LIBRARIES}
+  nvinfer
+  cudart
+  nvonnxparser
   yaml-cpp
-  # fmt.so
 )
 
 rclcpp_components_register_nodes(${PROJECT_NAME}

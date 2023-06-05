@@ -1,18 +1,42 @@
 #include "../../include/armor_detector/armor_detector.hpp"
 
 using namespace std;
+
 namespace perception_detector
 {
     Detector::Detector(const PathParam& path_param, const DetectorParam& detector_params, const DebugParam& debug_params) 
-    : detector_params_(detector_params), 
+    : detector_params_(detector_params),
+    TRTinfer_(0),
     path_params_(path_param), debug_params_(debug_params), logger_(rclcpp::get_logger("armor_detector"))
     {
         //初始化
-        lost_cnt = 0;
         is_last_target_exists = false;
         last_target_area = 0;
-        input_size = {640, 480};
-        armor_detector_.initModel(path_param.network_path);
+        input_size = {640, 640};
+
+        //初始化Infer
+        std::string onnx_path = path_param.network_path;
+        int postfix_idx = onnx_path.find(".onnx");
+        if (postfix_idx == onnx_path.npos)
+        {
+            RCLCPP_ERROR(logger_, "Invalid weight file,please check your file");
+            throw std::exception();
+        }
+        std::string trt_path = onnx_path;
+        trt_path.replace(trt_path.begin()+postfix_idx, trt_path.begin()+postfix_idx+5, ".engine");
+        if (!TRTinfer_.initMoudle(trt_path, 1, 4, 8, 8, 128))
+        {
+            RCLCPP_WARN(logger_,"Invalid trt file, attempting to convert onnx to trt.");
+            nvinfer1::IHostMemory *data = TRTinfer_.createEngine(onnx_path, 4, 416, 416);
+            RCLCPP_INFO(logger_,"TRT Engine successfully converted");
+            TRTinfer_.saveEngineFile(data, trt_path);
+            RCLCPP_INFO(logger_,"TRT Engine successfully saved to %s", trt_path.c_str());
+            TRTinfer_.initMoudle(trt_path, 1, 4, 8, 8, 128);
+        }
+        else
+        {
+            RCLCPP_WARN(logger_,"Using cached TRT engine file,do remember to delete it before you use different onnx.");
+        }
 
     }
 
@@ -33,33 +57,38 @@ namespace perception_detector
         time_start = steady_clock_.now();
         auto input = src;
         time_crop = steady_clock_.now();
-        objects.clear();
-        
-        if(!armor_detector_.detect(input, objects))
-        {   //若未检测到目标
-            lost_cnt++;
+        objects_.clear();
+        std::vector<cv::Mat> inputs;
+        inputs.push_back(input);
+        objects_ = TRTinfer_.doInference(inputs,0.7,0.3)[0];
+        time_infer = steady_clock_.now();
+        if (objects_.empty())
+        {
             is_last_target_exists = false;
             last_armors.clear();
             last_target_area = 0.0;
             return false;
         }
-        time_infer = steady_clock_.now();
+
         //生成装甲板对象
-        for (auto object : objects)
+        for (auto object : objects_)
         {
             Armor armor;
             armor.id = object.cls;
             // RCLCPP_INFO(logger_, "armor id:%d",armor.id );
-            armor.color = object.color;
+            armor.color = object.color / 2;
             armor.conf = object.prob;
-            if (object.color == 0)
+            if (armor.color == 0)
                 armor.key = "B" + to_string(object.cls);
-            if (object.color == 1)
+            if (armor.color == 1)
                 armor.key = "R" + to_string(object.cls);
-            if (object.color == 2)
+            if (armor.color == 2)
                 armor.key = "N" + to_string(object.cls);
-            if (object.color == 3)
+            if (armor.color == 3)
                 armor.key = "P" + to_string(object.cls);
+
+            if (object.color >= 4)
+                continue;
             memcpy(armor.apex2d, object.apex, 4 * sizeof(cv::Point2f));
             Point2f apex_sum;
             for(auto apex : armor.apex2d)
@@ -105,7 +134,6 @@ namespace perception_detector
                 }
             }
             //进行PnP，目标较少时采取迭代法，较多时采用IPPE
-            int pnp_method;
             TargetType target_type = SMALL;
 
             //计算长宽比,确定装甲板类型
@@ -151,9 +179,8 @@ namespace perception_detector
             Eigen::Vector3d tvec_eigen;
             Eigen::Vector3d coord_camera;
 
-            solvePnP(points_world, points_pic, intrinsic, dis_coeff, rvec, tvec, false, SOLVEPNP_IPPE);
+            solvePnP(points_world, points_pic, intrinsic, dis_coeff, rvec, tvec, false, SOLVEPNP_EPNP);
                 
-            PnPInfo result;
             //Pc = R * Pw + T
             Rodrigues(rvec, rmat);
             cv2eigen(rmat, rmat_eigen);
@@ -166,7 +193,6 @@ namespace perception_detector
                 isnan(tvec_eigen[2]))
                     continue;
             armor.armor3d_cam = tvec_eigen;
-            armor.euler = rotationMatrixToEulerAngles(rmat_eigen);
             armor.rmat = rmat_eigen;
             armor.area = object.area;
             armors.push_back(armor);
@@ -176,7 +202,6 @@ namespace perception_detector
         {
             RCLCPP_WARN_THROTTLE(logger_, this->steady_clock_, 500, "No suitable targets...");
             last_armors.clear();
-            lost_cnt++;
             is_last_target_exists = false;
             last_target_area = 0;
             return false;

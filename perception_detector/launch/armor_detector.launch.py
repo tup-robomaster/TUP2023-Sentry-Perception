@@ -17,9 +17,18 @@ def generate_launch_description():
 
     cam_config = os.path.join(share_path_usb, 'config', 'params.yaml')
 
+    params_path_f = os.path.join(share_path_usb, 'config', 'usb_front','params.yaml')
     params_path_l = os.path.join(share_path_usb, 'config', 'usb_left','params.yaml')
     params_path_r = os.path.join(share_path_usb, 'config', 'usb_right','params.yaml')
-    
+    params_path_b = os.path.join(share_path_usb, 'config', 'usb_back','params.yaml')
+    ld.add_action(Node(
+        package='usb_cam', executable='usb_cam_node_exe', output="log",
+        name="usb_cam_node_f",
+        parameters=[params_path_f],
+        remappings=[("image_raw","/usb_front/image_raw"),
+                    ("camera_info","/usb_front/camera_info")],
+        respawn=True
+        ))
     ld.add_action(Node(
         package='usb_cam', executable='usb_cam_node_exe', output="log",
         name="usb_cam_node_l",
@@ -37,10 +46,18 @@ def generate_launch_description():
         respawn=True
         ))
     ld.add_action(Node(
+        package='usb_cam', executable='usb_cam_node_exe', output="log",
+        name="usb_cam_node_b",
+        parameters=[params_path_b],
+        remappings=[("image_raw","/usb_back/image_raw"),
+                    ("camera_info","/usb_back/camera_info")],
+        respawn=True
+        ))
+    ld.add_action(Node(
         package = "perception_detector",
         name = 'perception_detector',
         executable = 'perception_detector_node',
-        output="log",
+        output="screen",
         respawn=True
     ))
     # ld.add_action(ComposableNodeContainer(

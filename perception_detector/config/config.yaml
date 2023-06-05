@@ -7,3 +7,11 @@ cams:
       image_topic: /usb_right/image_raw
       frame_id: "usb_right_frame"
       camera_info_path: /home/tup/ros2_ws/src/TUP2023-Sentry-Framework/TUP2023-Sentry-Perception/usb_cam/config/usb_right/camera_info.yaml
+    usb_back: 
+      image_topic: /usb_back/image_raw
+      frame_id: "usb_back_frame"
+      camera_info_path: /home/tup/ros2_ws/src/TUP2023-Sentry-Framework/TUP2023-Sentry-Perception/usb_cam/config/usb_back/camera_info.yaml
+    usb_front: 
+      image_topic: /usb_front/image_raw
+      frame_id: "usb_front_frame"
+      camera_info_path: /home/tup/ros2_ws/src/TUP2023-Sentry-Framework/TUP2023-Sentry-Perception/usb_cam/config/usb_front/camera_info.yaml

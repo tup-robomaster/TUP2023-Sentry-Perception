@@ -1,6 +1,6 @@
 /**:
     ros__parameters:
-      video_device: "/dev/video2"
+      video_device: "/dev/video6"
       framerate: 30.0
       io_method: "mmap"
       frame_id: "usb_left_frame"
@@ -10,11 +10,11 @@
       image_height: 480
       camera_name: "usb_left"
       camera_info_url: "package://usb_cam/config/usb_left/camera_info.yaml"
-      brightness: -1
+      brightness: 0
       contrast: -1
       saturation: -1
       sharpness: -1
-      gain: -1
+      gain: 0
       auto_white_balance: true
       white_balance: 4000
       autoexposure: false
