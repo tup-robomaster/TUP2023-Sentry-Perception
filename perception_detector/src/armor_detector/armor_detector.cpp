@@ -1,8 +1,37 @@
 #include "../../include/armor_detector/armor_detector.hpp"
 
 using namespace std;
+
+
+
 namespace perception_detector
 {
+    inline Eigen::Vector3d rotationMatrixToEulerAngles(Eigen::Matrix3d &R)
+    {
+        /**
+         * @brief transform rotatedMatrix to euler angle
+         * 
+         */
+        double sy = sqrt(R(0,0) * R(0,0) + R(1,0) * R(1,0));
+        bool singular = sy < 1e-6;
+        double x, y, z;
+        
+        if (!singular)
+        {
+            x = atan2( R(2,1), R(2,2));
+            y = atan2(-R(2,0), sy);
+            z = atan2( R(1,0), R(0,0));
+        }
+        else
+        {
+            x = atan2(-R(1,2), R(1,1));
+            y = atan2(-R(2,0), sy);
+            z = 0;
+        }
+
+        return {z, y, x};
+    }
+
     Detector::Detector(const PathParam& path_param, const DetectorParam& detector_params, const DebugParam& debug_params) 
     : detector_params_(detector_params), 
     path_params_(path_param), debug_params_(debug_params), logger_(rclcpp::get_logger("armor_detector"))
@@ -105,7 +134,6 @@ namespace perception_detector
                 }
             }
             //进行PnP，目标较少时采取迭代法，较多时采用IPPE
-            int pnp_method;
             TargetType target_type = SMALL;
 
             //计算长宽比,确定装甲板类型
@@ -153,7 +181,6 @@ namespace perception_detector
 
             solvePnP(points_world, points_pic, intrinsic, dis_coeff, rvec, tvec, false, SOLVEPNP_IPPE);
                 
-            PnPInfo result;
             //Pc = R * Pw + T
             Rodrigues(rvec, rmat);
             cv2eigen(rmat, rmat_eigen);

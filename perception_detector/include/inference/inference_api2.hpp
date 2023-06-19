@@ -23,16 +23,30 @@
 // #include <fftw3.h>
 // #include <fmt/color.h>
 
-#include "../../global_user/include/global_user/global_user.hpp"
-
-using namespace global_user;
 namespace perception_detector
 {
+    struct Object
+    {
+        cv::Rect_<float> rect;
+        int cls;
+        int color;
+        float prob;
+        std::vector<cv::Point2f> pts;
+    };
+    
     struct ArmorObject : Object
     {
         int area;
         cv::Point2f apex[4];
     };
+
+    struct GridAndStride
+    {
+        int grid0;
+        int grid1;
+        int stride;
+    };
+
 
     class ArmorDetector
     {

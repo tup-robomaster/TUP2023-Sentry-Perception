@@ -9,18 +9,19 @@
 //ros
 #include <rclcpp/rclcpp.hpp>
 
+//eigen
+#include <Eigen/Core>
+#include <Eigen/Dense>
+
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/eigen.hpp>
+
 #include <yaml-cpp/yaml.h>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
 #include "../inference/inference_api2.hpp"
-#include "../../global_user/include/global_user/global_user.hpp"
-#include "../../global_user/include/coordsolver.hpp"
-#include "global_interface/msg/autoaim.hpp"
 
-using namespace global_user;
-using namespace coordsolver;
 using namespace cv;
 using namespace std;
 namespace perception_detector
@@ -30,6 +31,24 @@ namespace perception_detector
         BLUE,
         RED
     };
+
+    enum TargetType 
+    {  
+        SMALL, 
+        BIG, 
+    };
+    struct ObjectBase
+    {
+        int id;
+        int color;
+        double conf;
+        std::string key;
+        Eigen::Vector3d armor3d_cam;
+        Eigen::Vector3d armor3d_world;
+        Eigen::Vector3d euler;
+        Eigen::Matrix3d rmat;
+    };
+
     struct Armor : ObjectBase
     {
         int area;
@@ -40,27 +59,8 @@ namespace perception_detector
         cv::Point2d center2d;
         TargetType type;
     };
-    struct Robot 
-    {
-        cv::Rect m_rect;
-        int m_number;
-        int m_color;
-        // int m_armornums;
-        int m_id; 
-        // cv::Point3f XYZ_camera;
-        // cv::Point3f XYZ_world;
-        Eigen::Vector3d XYZ_camera;
-        Eigen::Vector3d XYZ_world;
-        // Robot()
-        // {
-        //     m_number = 0;
-        //     m_color = 0;
-        //     // m_armornums = 0;
-        //     m_id = -1;
-        //     XYZ_camera = {0.0, 0.0, 0.0};
-        //     XYZ_world = {0.0, 0.0, 0.0};
-        // }
-    };
+
+
     struct DebugParam
     {
         // bool debug_without_com;
@@ -161,14 +161,12 @@ namespace perception_detector
         // std::vector<Robot> final_robot_results;
 
         bool is_init_;
-        ofstream data_save_;
         ArmorDetector armor_detector_;
     private:
         Armor last_armor;
         std::vector<ArmorObject> objects;
         std::map<string, int> new_armors_cnt_map;    //装甲板计数map，记录新增装甲板数
         rclcpp::Logger logger_;
-        ofstream file_;
         std::string path_prefix_ = "src/camera_driver/recorder/autoaim_dataset/";
 
     private:
@@ -194,7 +192,6 @@ namespace perception_detector
         Size2i input_size;
 
         void showArmors(cv::Mat &src, std::vector<Armor> armors);
-        void showCar(TaskData& src);
         
     private:
         double cur_period_;

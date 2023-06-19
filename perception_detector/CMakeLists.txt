@@ -44,7 +44,6 @@ find_package(yaml-cpp REQUIRED)
 # find_package(fmt REQUIRED)
 
 # custom package
-find_package(global_user REQUIRED)
 find_package(global_interface REQUIRED)
 find_package(PkgConfig REQUIRED)
 include_directories(
@@ -71,11 +70,9 @@ set(dependencies
   Ceres
   Eigen3
   cv_bridge
-  yaml-cpp 
-  # fmt
+  yaml-cpp
+  global_interface  # fmt
 
-  global_interface
-  global_user
 )
   
 add_library(${PROJECT_NAME} SHARED
