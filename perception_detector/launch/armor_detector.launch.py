@@ -57,7 +57,7 @@ def generate_launch_description():
         package = "perception_detector",
         name = 'perception_detector',
         executable = 'perception_detector_node',
-        output="screen",
+        output="log",
         respawn=True
     ))
     # ld.add_action(ComposableNodeContainer(

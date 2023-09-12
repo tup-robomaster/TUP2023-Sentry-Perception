@@ -264,6 +264,7 @@ namespace TRTInferV1
 
                 (*object).area = (int)(this->calcPolygonArea((*object).apex));
             }
+            // std::cout<<b<<" basize: "<<res.size()<<std::endl;
         }
     }
 

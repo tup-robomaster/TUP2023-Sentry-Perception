@@ -9,11 +9,6 @@ namespace perception_detector
     TRTinfer_(0),
     path_params_(path_param), debug_params_(debug_params), logger_(rclcpp::get_logger("armor_detector"))
     {
-        //初始化
-        is_last_target_exists = false;
-        last_target_area = 0;
-        input_size = {640, 640};
-
         //初始化Infer
         std::string onnx_path = path_param.network_path;
         int postfix_idx = onnx_path.find(".onnx");
@@ -27,7 +22,8 @@ namespace perception_detector
         if (!TRTinfer_.initMoudle(trt_path, 1, 4, 8, 8, 128))
         {
             RCLCPP_WARN(logger_,"Invalid trt file, attempting to convert onnx to trt.");
-            nvinfer1::IHostMemory *data = TRTinfer_.createEngine(onnx_path, 4, 416, 416);
+            //TODO: Adaptive Batchsize
+            nvinfer1::IHostMemory *data = TRTinfer_.createEngine(onnx_path, 1, 640, 640);
             RCLCPP_INFO(logger_,"TRT Engine successfully converted");
             TRTinfer_.saveEngineFile(data, trt_path);
             RCLCPP_INFO(logger_,"TRT Engine successfully saved to %s", trt_path.c_str());
@@ -52,32 +48,28 @@ namespace perception_detector
      * @return true 
      * @return false 
      */
-    bool Detector::detect(cv::Mat &src, std::vector<Armor> &armors)
+    bool Detector::detect(cv::Mat &src, std::vector<Armor> &armors, int cam_idx)
     {
-        time_start = steady_clock_.now();
-        auto input = src;
-        time_crop = steady_clock_.now();
-        objects_.clear();
         std::vector<cv::Mat> inputs;
-        inputs.push_back(input);
-        objects_ = TRTinfer_.doInference(inputs,0.7,0.3)[0];
-        time_infer = steady_clock_.now();
-        if (objects_.empty())
-        {
-            is_last_target_exists = false;
-            last_armors.clear();
-            last_target_area = 0.0;
-            return false;
-        }
-
+        std::vector<DetectObject> objects;
+        inputs.push_back(src);
+        objects = TRTinfer_.doInference(inputs,0.7,0.3)[0];
+        // std::cout<<i<<".SIZE:"<<objects.size()<<std::endl;
+        cv::Mat intrinsic = intrinsics[cam_idx].intrinsic;
+        cv::Mat dis_coeff = intrinsics[cam_idx].dis_coeff;
         //生成装甲板对象
-        for (auto object : objects_)
+        for (auto object : objects)
         {
             Armor armor;
+            if (object.cls == 6 || object.cls == 7)
+                continue;
+            if (object.cls == 0)
+                object.cls = 7;
             armor.id = object.cls;
             // RCLCPP_INFO(logger_, "armor id:%d",armor.id );
             armor.color = object.color / 2;
             armor.conf = object.prob;
+
             if (armor.color == 0)
                 armor.key = "B" + to_string(object.cls);
             if (armor.color == 1)
@@ -107,32 +99,6 @@ namespace perception_detector
                             bbox.width * detector_params_.armor_roi_expand_ratio_width,
                             bbox.height * detector_params_.armor_roi_expand_ratio_height
                             );
-            //若装甲板置信度小于高阈值，需要相同位置存在过装甲板才放行
-            if (armor.conf < this->detector_params_.armor_conf_high_thres)
-            {
-                if (last_armors.empty())
-                {
-                    continue;
-                }
-                else
-                {
-                    bool is_this_armor_available = false;
-                    for (auto last_armor : last_armors)
-                    {
-                        if (last_armor.roi.contains(armor.center2d))
-                        {
-                            is_this_armor_available = true;
-                            break;
-                        }
-                    }
-
-                    if (!is_this_armor_available)
-                    {
-                        continue;
-                        cout << "IGN" << endl;
-                    }
-                }
-            }
             //进行PnP，目标较少时采取迭代法，较多时采用IPPE
             TargetType target_type = SMALL;
 
@@ -144,7 +110,7 @@ namespace perception_detector
                 target_type = BIG;
             //FIXME：若存在平衡步兵需要对此处步兵装甲板类型进行修改
             else if (object.cls == 0 || object.cls == 2 || object.cls == 3 ||
-                         object.cls == 4 || object.cls == 5 || object.cls == 6)
+                        object.cls == 4 || object.cls == 5 || object.cls == 6)
                 target_type = SMALL;
             else if(apex_wh_ratio > detector_params_.armor_type_wh_thres)
                 target_type = BIG;
@@ -179,7 +145,7 @@ namespace perception_detector
             Eigen::Vector3d tvec_eigen;
             Eigen::Vector3d coord_camera;
 
-            solvePnP(points_world, points_pic, intrinsic, dis_coeff, rvec, tvec, false, SOLVEPNP_EPNP);
+            solvePnP(points_world, points_pic, intrinsic, dis_coeff, rvec, tvec, false, SOLVEPNP_IPPE);
                 
             //Pc = R * Pw + T
             Rodrigues(rvec, rmat);
@@ -197,61 +163,13 @@ namespace perception_detector
             armor.area = object.area;
             armors.push_back(armor);
         }
-        //若无合适装甲板
         if (armors.empty())
-        {
-            RCLCPP_WARN_THROTTLE(logger_, this->steady_clock_, 500, "No suitable targets...");
-            last_armors.clear();
-            is_last_target_exists = false;
-            last_target_area = 0;
             return false;
-        }
         else
-        {
-            last_armors = armors;
-           if(debug_params_.show_all_armors)
-            {
-                RCLCPP_DEBUG_ONCE(logger_, "Show all armors...");
-                showArmors(src,armors);
-            } 
-        }
-        
-        return true;
+            return true;
     }
 
- 
-    /**
-     * @brief 显示检测到的装甲板信息
-     * 
-     * @param src 图像数据结构体
-     */
-    void Detector::showArmors(cv::Mat &src, std::vector<Armor> armors)
-    {
-        // RCLCPP_INFO(logger_, "=========================");
-        for (auto armor : armors)
-        {
-            // RCLCPP_INFO(logger_, "=========================");
-            char ch[10];
-            sprintf(ch, "%.3f", armor.conf);
-            std::string conf_str = ch;
-            putText(src, conf_str, armor.apex2d[3], FONT_HERSHEY_SIMPLEX, 1, {0, 255, 0}, 2);
-
-            std::string id_str = to_string(armor.id);
-            if (armor.color == 0)
-                putText(src, "B" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 100, 0}, 2);
-            if (armor.color == 1)
-                putText(src, "R" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {0, 0, 255}, 2);
-            if (armor.color == 2)
-                putText(src, "N" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 255, 255}, 2);
-            if (armor.color == 3)
-                putText(src, "P" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 100, 255}, 2);
-            for(int i = 0; i < 4; i++)
-                line(src, armor.apex2d[i % 4], armor.apex2d[(i + 1) % 4], {0,255,0}, 1);
-            rectangle(src, armor.roi, {255, 0, 255}, 1);
-        }
-    }
-
-    bool Detector::setCameraIntrinsicsByYAML(const std::string& yaml_file_path)
+    bool Detector::addCameraIntrinsicsByYAML(const std::string& yaml_file_path)
     {
         // Load camera intrinsics from YAML file
         YAML::Node config = YAML::LoadFile(yaml_file_path);
@@ -279,8 +197,16 @@ namespace perception_detector
         distortion_coefficients[3] = distortion_coefficients[2];
         distortion_coefficients[2] = tmp;
 
+        cv::Mat intrinsic;
+        cv::Mat dis_coeff;
         eigen2cv(camera_matrix,intrinsic);
         eigen2cv(distortion_coefficients, dis_coeff);
+
+        CvIntrinsic cv_intrinsic;
+        cv_intrinsic.intrinsic = intrinsic;
+        cv_intrinsic.dis_coeff = dis_coeff;
+
+        intrinsics.push_back(cv_intrinsic);
 
         return true;
     }

@@ -119,6 +119,12 @@ namespace perception_detector
         }
     };
 
+    struct CvIntrinsic
+    {
+        cv::Mat intrinsic = cv::Mat(3, 3, CV_64FC1);
+        cv::Mat dis_coeff = cv::Mat(1, 5, CV_64FC1);
+    };
+
     // std::vector<cv::Mat> _intrinsic_cvs;
     // std::vector<cv::Mat> _extrinsic_cvs;
     // std::vector<cv::Mat> _discoff_cvs;
@@ -130,17 +136,16 @@ namespace perception_detector
         ~Detector();
 
         // void run();
-        bool detect(cv::Mat &src, std::vector<Armor> &armors);
-        bool setCameraIntrinsicsByYAML(const std::string& yaml_file_path);
+        bool detect(cv::Mat &src, std::vector<Armor> &armors, int cam_idx);
+        bool addCameraIntrinsicsByYAML(const std::string& yaml_file_path);
    
     public:
         TRTInferV1::TRTInfer TRTinfer_;
-        std::vector<DetectObject> objects_;
+        std::vector<std::vector<DetectObject>> batched_objects_;
         rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
 
         std::vector<Armor> last_armors;
-        cv::Mat intrinsic;
-        cv::Mat dis_coeff;
+        std::vector<CvIntrinsic> intrinsics;
         // std::vector<Robot> robot_results;
         // std::vector<Robot> final_robot_results;
 
@@ -148,7 +153,6 @@ namespace perception_detector
         ofstream data_save_;
     private:
         Armor last_armor;
-        std::map<string, int> new_armors_cnt_map;    //装甲板计数map，记录新增装甲板数
         rclcpp::Logger logger_;
         ofstream file_;
         std::string path_prefix_ = "src/camera_driver/recorder/autoaim_dataset/";
@@ -173,8 +177,6 @@ namespace perception_detector
         
         Point2i roi_offset;
         Size2i input_size;
-
-        void showArmors(cv::Mat &src, std::vector<Armor> armors);
         
     private:
         double cur_period_;

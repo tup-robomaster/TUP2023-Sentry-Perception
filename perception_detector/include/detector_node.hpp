@@ -41,14 +41,17 @@ namespace perception_detector
         global_interface::msg::Detection armor2Detection(Armor armor, std_msgs::msg::Header header);
         std::vector<Armor> detectionArray2Armors(global_interface::msg::DetectionArray detections);
         Armor detection2Armor(global_interface::msg::Detection detection);
+        void showArmors(cv::Mat &src, std::vector<Armor> armors);
         std::vector<visualization_msgs::msg::Marker> getvisRobotMarkers(global_interface::msg::DetectionArray detections);
         bool sphereNMS(std::vector<Armor> &armors);
     private:
         rclcpp::Time time_start_;
-
+        std::unique_ptr<Detector> detector_;
         std::vector<std::shared_ptr<image_transport::Subscriber>> img_sub_;
         std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
         std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+        std::deque<sensor_msgs::msg::Image::ConstPtr> image_deque_;
+        std::mutex image_deque_mutex;
         std::deque<global_interface::msg::DetectionArray> detections_deque_;
         // Pub target armor msg.
         rclcpp::Publisher<DetectionArrayMsg>::SharedPtr perception_info_pub_;
@@ -56,6 +59,7 @@ namespace perception_detector
         // Params callback.
         // Subscribe img. 
         void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info);
+        void inferCallback();
         void postProcessCallback();
         // Subscribe serial msg.
         Mutex msg_mutex_;
@@ -69,7 +73,7 @@ namespace perception_detector
         PathParam path_params_;
         DebugParam debug_;
         rclcpp::TimerBase::SharedPtr postprocess_timer_;
-        std::vector<std::unique_ptr<Detector>> detectors_;
+        rclcpp::TimerBase::SharedPtr infer_timer_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr vis_robot_pub_;
     };
 } //namespace detector

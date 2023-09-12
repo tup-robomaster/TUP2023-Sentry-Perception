@@ -8,7 +8,7 @@ namespace perception_detector
     {
         RCLCPP_WARN(this->get_logger(), "Starting detector node...");
         initParams();
-
+        detector_ = std::make_unique<Detector>(path_params_, detector_params_, debug_);
         img_sub_.clear();
         //QoS    
         rclcpp::QoS qos(0);
@@ -26,28 +26,14 @@ namespace perception_detector
         std::string transport_type = this->declare_parameter("subscribe_compressed", false) ? "compressed" : "raw";
         perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("perception_detector/perception_array", qos);
         vis_robot_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("perception_detector/visual_robot", qos);
-        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 100ms, std::bind(&DetectorNode::postProcessCallback, this));
-        
-
-
+        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 150ms, std::bind(&DetectorNode::postProcessCallback, this));
+        infer_timer_ = rclcpp::create_timer(this, this->get_clock(), 10ms, std::bind(&DetectorNode::inferCallback, this));
         // CameraType camera_num;
         std::cout<<path_params_.camera_param_path<<std::endl;
         YAML::Node config = YAML::LoadFile(path_params_.camera_param_path);
         const YAML::Node& top_node = config["cams"];
         // 获取本级列表并遍历所有元素
         YAML::const_iterator it = top_node.begin();
-        std::vector<std::shared_future<bool>> detector_init_task;
-        auto init_func = [=](std::string camera_topic, std::string camera_info_path)
-                            {
-                                auto detector = std::make_unique<Detector>(path_params_, detector_params_, debug_);
-                                detector->setCameraIntrinsicsByYAML(camera_info_path);
-                                img_sub_.push_back(std::make_shared<image_transport::Subscriber>
-                                                    (image_transport::create_subscription(this, camera_topic,
-                                                    std::bind(&DetectorNode::imageCallback, this, _1), transport_type, rmw_qos)));
-                                detectors_.push_back(std::move(detector));
-                                return true;
-                            };
-
         for (int i = 0; i < top_node.size(); ++i)
         {
             // Get key name
@@ -58,22 +44,50 @@ namespace perception_detector
             std::string camera_topic = sub_node["image_topic"].as<std::string>();
             std::string camera_frame = sub_node["frame_id"].as<std::string>();
             std::string camera_info_path = sub_node["camera_info_path"].as<std::string>();
+            detector_->addCameraIntrinsicsByYAML(camera_info_path);
             registered_cams.push_back(camera_frame);
-            detector_init_task.push_back(std::async(std::launch::deferred, init_func, camera_topic, camera_info_path));
+            img_sub_.push_back(std::make_shared<image_transport::Subscriber>
+                                (image_transport::create_subscription(this, camera_topic,
+                                std::bind(&DetectorNode::imageCallback, this, _1), transport_type, rmw_qos)));
             RCLCPP_INFO(this->get_logger(), "Registered callback for %s ...", key.c_str());
             ++it;
         }
-        //Wait for detectors to init...
-        for (auto future : detector_init_task)
-            future.wait();
+        // std::vector<std::shared_future<bool>> detector_init_task;
+        // auto init_func = [=](std::string camera_topic, std::string camera_info_path)
+        //                     {
+        //                         auto detector = std::make_unique<Detector>(path_params_, detector_params_, debug_);
+        //                         detector->setCameraIntrinsicsByYAML(camera_info_path);
+        //                         detectors_.push_back(std::move(detector));
+        //                         return true;
+        //                     };
+
+        // for (int i = 0; i < top_node.size(); ++i)
+        // {
+        //     // Get key name
+        //     const std::string key = it->first.as<std::string>();
+        //     // Get sub-node for key
+        //     const YAML::Node& sub_node = it->second;
+        //     // Loop over keys in sub-node
+        //     std::string camera_topic = sub_node["image_topic"].as<std::string>();
+        //     std::string camera_frame = sub_node["frame_id"].as<std::string>();
+        //     std::string camera_info_path = sub_node["camera_info_path"].as<std::string>();
+        //     registered_cams.push_back(camera_frame);
+        //     detector_init_task.push_back(std::async(std::launch::deferred, init_func, camera_topic, camera_info_path));
+        //     RCLCPP_INFO(this->get_logger(), "Registered callback for %s ...", key.c_str());
+        //     ++it;
+        // }
+        // //Wait for detectors to init...
+        // for (auto future : detector_init_task)
+        //     future.wait();
+        // image_deque_vec_.resize(registered_cams.size())
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     }
 
     DetectorNode::~DetectorNode()
     {
-       detectors_.clear();
     }
+
     void DetectorNode::postProcessCallback()
     {
         std::vector<global_interface::msg::DetectionArray> detections_vec;
@@ -322,75 +336,189 @@ namespace perception_detector
         return true;
     }
 
+    void DetectorNode::inferCallback()
+    {
+        cv::Mat input;
+        std::vector<Armor> armors;
+
+        if (image_deque_.empty())
+            return;
+        image_deque_mutex.lock();
+        while(image_deque_.size() > 8)
+            image_deque_.pop_front();
+        auto img_info = image_deque_.front();
+        input = cv_bridge::toCvCopy(img_info, "bgr8")->image;
+        image_deque_.pop_front();
+        image_deque_mutex.unlock();
+        std::string frame_id = img_info->header.frame_id;
+        auto cam_it = std::find(registered_cams.begin(), registered_cams.end(), frame_id);
+        int cam_idx = cam_it - registered_cams.begin();
+        // std::cout<<cam_idx<<std::endl;
+        if (detector_->detect(input, armors, cam_idx))
+        {
+            // Transform from cam frame to base link.
+            geometry_msgs::msg::TransformStamped tf_msg;
+            try
+            {
+                tf_msg = tf_buffer_->lookupTransform("base_link", frame_id, img_info->header.stamp,
+                                                                        rclcpp::Duration::from_seconds(0.1));
+            }
+            catch (const tf2::TransformException &ex)
+            {
+                RCLCPP_ERROR(this->get_logger(), "%s",ex.what());
+                return;
+            }
+            //Transform detection.
+            std_msgs::msg::Header header = img_info->header;
+            global_interface::msg::DetectionArray detections;
+            detections.header = img_info->header;
+            detections.header.frame_id = "base_link";
+            for (auto armor : armors)
+            {
+                auto detection = armor2Detection(armor, header);
+                auto detection_transformed = detection;
+                geometry_msgs::msg::PoseStamped pose, transformed_pose;
+                pose.header = detection.header;
+                pose.pose = detection.center;
+                try {
+                    tf2::doTransform(pose, transformed_pose, tf_msg);
+                } catch (tf2::TransformException &ex) {
+                    RCLCPP_ERROR(this->get_logger(), "Transform failed: %s", ex.what());
+                    return;
+                }
+                detection_transformed.header.frame_id = "base_link";
+                detection_transformed.center = transformed_pose.pose;
+                detections.detections.push_back(detection_transformed);
+            }
+
+            if(debug_.show_img)
+            {
+                // RCLCPP_INFO(this->get_logger(), "show img...");
+                cv::namedWindow(frame_id + "_detect", cv::WINDOW_AUTOSIZE);
+                showArmors(input, armors);
+                cv::imshow(frame_id + "_detect", input);
+                cv::waitKey(1);
+            }
+            detections_mutex_.lock();
+            detections_deque_.push_back(detections);
+            detections_mutex_.unlock();
+        }
+    }
+
+    /**
+     * @brief 显示检测到的装甲板信息
+     * 
+     * @param src 图像数据结构体
+     */
+    void DetectorNode::showArmors(cv::Mat &src, std::vector<Armor> armors)
+    {
+        // RCLCPP_INFO(logger_, "=========================");
+        for (auto armor : armors)
+        {
+            // RCLCPP_INFO(logger_, "=========================");
+            char ch[10];
+            sprintf(ch, "%.3f", armor.conf);
+            std::string conf_str = ch;
+            putText(src, conf_str, armor.apex2d[3], FONT_HERSHEY_SIMPLEX, 1, {0, 255, 0}, 2);
+
+            std::string id_str = to_string(armor.id);
+            if (armor.color == 0)
+                putText(src, "B" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 100, 0}, 2);
+            if (armor.color == 1)
+                putText(src, "R" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {0, 0, 255}, 2);
+            if (armor.color == 2)
+                putText(src, "N" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 255, 255}, 2);
+            if (armor.color == 3)
+                putText(src, "P" + id_str, armor.apex2d[0], FONT_HERSHEY_SIMPLEX, 1, {255, 100, 255}, 2);
+            for(int i = 0; i < 4; i++)
+                line(src, armor.apex2d[i % 4], armor.apex2d[(i + 1) % 4], {0,255,0}, 1);
+            rectangle(src, armor.roi, {255, 0, 255}, 1);
+        }
+    }
+
     /**
      * @brief 图像数据回调
      * @param img_info 图像传感器数据
      */
     void DetectorNode::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &img_info)
     {
-        auto img = cv_bridge::toCvShare(img_info, "bgr8")->image;
         std::string frame_id = img_info->header.frame_id;
-        //获取该相机所分配的detector idx.
         auto cam_it = std::find(registered_cams.begin(), registered_cams.end(), frame_id);
         if (cam_it != registered_cams.end())
         {
             int idx = cam_it - registered_cams.begin();
-            std::vector<Armor> armors;
-            if (detectors_.at(idx)->detect(img, armors))
-            {
-                //Transform from cam frame to base link.
-                geometry_msgs::msg::TransformStamped tf_msg;
-                try
-                {
-                    tf_msg = tf_buffer_->lookupTransform("base_link", frame_id, img_info->header.stamp,
-                                                                         rclcpp::Duration::from_seconds(0.1));
-                }
-                catch (const tf2::TransformException &ex)
-                {
-                    RCLCPP_ERROR(this->get_logger(), "%s",ex.what());
-                    return;
-                }
-                //Transform detection.
-                std_msgs::msg::Header header = img_info->header;
-                global_interface::msg::DetectionArray detections;
-                detections.header = img_info->header;
-                detections.header.frame_id = "base_link";
-                for (auto armor : armors)
-                {
-                    auto detection = armor2Detection(armor, header);
-                    auto detection_transformed = detection;
-                    geometry_msgs::msg::PoseStamped pose, transformed_pose;
-                    pose.header = detection.header;
-                    pose.pose = detection.center;
-                    try {
-                        tf2::doTransform(pose, transformed_pose, tf_msg);
-                    } catch (tf2::TransformException &ex) {
-                        RCLCPP_ERROR(this->get_logger(), "Transform failed: %s", ex.what());
-                        return;
-                    }
-                    detection_transformed.header.frame_id = "base_link";
-                    detection_transformed.center = transformed_pose.pose;
-                    detections.detections.push_back(detection_transformed);
-                }
-
-                detections_mutex_.lock();
-                detections_deque_.push_back(detections);
-                detections_mutex_.unlock();
-
-                debug_.show_img = this->get_parameter("show_img").as_bool();
-                if(debug_.show_img)
-                {
-                    // RCLCPP_INFO(this->get_logger(), "show img...");
-                    cv::namedWindow(frame_id + "_detect", cv::WINDOW_AUTOSIZE);
-                    cv::imshow(frame_id + "_detect", img);
-                    cv::waitKey(1);
-                }
-            }
+            image_deque_mutex.lock();
+            image_deque_.push_back(img_info);
+            // image_deque_vec_[idx].push_back(img_info);
+            // if (image_deque_vec_[idx].size() > 1)
+            //     image_deque_vec_[idx].pop_front();
+            image_deque_mutex.unlock();
         }
         else
         {
             RCLCPP_WARN(this->get_logger(), "Detected invalid frame_id for detect...");
         }
+        //获取该相机所分配的detector idx.
+        // auto cam_it = std::find(registered_cams.begin(), registered_cams.end(), frame_id);
+        // if (cam_it != registered_cams.end())
+        // {
+        //     int idx = cam_it - registered_cams.begin();
+        //     std::vector<Armor> armors;
+        //     if (detectors_.at(idx)->detect(img, armors))
+        //     {
+        //         //Transform from cam frame to base link.
+        //         geometry_msgs::msg::TransformStamped tf_msg;
+        //         try
+        //         {
+        //             tf_msg = tf_buffer_->lookupTransform("base_link", frame_id, img_info->header.stamp,
+        //                                                                  rclcpp::Duration::from_seconds(0.1));
+        //         }
+        //         catch (const tf2::TransformException &ex)
+        //         {
+        //             RCLCPP_ERROR(this->get_logger(), "%s",ex.what());
+        //             return;
+        //         }
+        //         //Transform detection.
+        //         std_msgs::msg::Header header = img_info->header;
+        //         global_interface::msg::DetectionArray detections;
+        //         detections.header = img_info->header;
+        //         detections.header.frame_id = "base_link";
+        //         for (auto armor : armors)
+        //         {
+        //             auto detection = armor2Detection(armor, header);
+        //             auto detection_transformed = detection;
+        //             geometry_msgs::msg::PoseStamped pose, transformed_pose;
+        //             pose.header = detection.header;
+        //             pose.pose = detection.center;
+        //             try {
+        //                 tf2::doTransform(pose, transformed_pose, tf_msg);
+        //             } catch (tf2::TransformException &ex) {
+        //                 RCLCPP_ERROR(this->get_logger(), "Transform failed: %s", ex.what());
+        //                 return;
+        //             }
+        //             detection_transformed.header.frame_id = "base_link";
+        //             detection_transformed.center = transformed_pose.pose;
+        //             detections.detections.push_back(detection_transformed);
+        //         }
+
+        //         detections_mutex_.lock();
+        //         detections_deque_.push_back(detections);
+        //         detections_mutex_.unlock();
+
+        //         debug_.show_img = this->get_parameter("show_img").as_bool();
+        //         if(debug_.show_img)
+        //         {
+        //             // RCLCPP_INFO(this->get_logger(), "show img...");
+        //             cv::namedWindow(frame_id + "_detect", cv::WINDOW_AUTOSIZE);
+        //             cv::imshow(frame_id + "_detect", img);
+        //             cv::waitKey(1);
+        //         }
+        //     }
+        // }
+        // else
+        // {
+        //     RCLCPP_WARN(this->get_logger(), "Detected invalid frame_id for detect...");
+        // }
     }
 
     /**
@@ -407,7 +535,7 @@ namespace perception_detector
         this->declare_parameter<double>("armor_conf_high_thres", 0.82);
         
         this->declare_parameter("camera_param_path", "/config/config.yaml");
-        this->declare_parameter("network_path", "/model/vgg_416.onnx");
+        this->declare_parameter("network_path", "/model/vgg_640.onnx");
         //Debug.
         this->declare_parameter("show_aim_cross", false);
         this->declare_parameter("show_img", true);
