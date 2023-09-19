@@ -1,7 +1,7 @@
 
 /**:
     ros__parameters:
-      video_device: "/dev/video4"
+      video_device: "/dev/video2"
       framerate: 30.0
       io_method: "mmap"
       frame_id: "usb_right_frame"
@@ -15,8 +15,8 @@
       contrast: -1
       saturation: -1
       sharpness: -1
-      gain: 0
+      gain: 20
       auto_white_balance: true
       white_balance: 4000
       autoexposure: true
-      exposure: 500
+      exposure: 5000
