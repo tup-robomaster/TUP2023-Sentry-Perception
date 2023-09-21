@@ -26,7 +26,7 @@ namespace perception_detector
         std::string transport_type = this->declare_parameter("subscribe_compressed", false) ? "compressed" : "raw";
         perception_info_pub_ = this->create_publisher<DetectionArrayMsg>("perception_detector/perception_array", qos);
         vis_robot_pub_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("perception_detector/visual_robot", qos);
-        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 150ms, std::bind(&DetectorNode::postProcessCallback, this));
+        postprocess_timer_ = rclcpp::create_timer(this, this->get_clock(), 100ms, std::bind(&DetectorNode::postProcessCallback, this));
         infer_timer_ = rclcpp::create_timer(this, this->get_clock(), 15ms, std::bind(&DetectorNode::inferCallback, this));
         // CameraType camera_num;
         std::cout<<path_params_.camera_param_path<<std::endl;
