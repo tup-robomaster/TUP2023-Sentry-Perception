@@ -4,7 +4,7 @@
 
 ## 1. 简介
 ### 1.1综述
-为补足工业相机视场角小，视野受限的问题，对敌方车辆检出范围受限的问题。我们设计了全向感知模块。该模块可以结合外接的USB摄像头与OAK深度摄像头对外界环境进行感知。
+为补足工业相机视场角小，视野受限的问题，对敌方车辆检出范围受限的问题。我们设计了全向感知模块。该模块可以结合外接的USB摄像头对外界环境进行感知。
 
 
 注意：
@@ -16,7 +16,7 @@
 |**/usb_left**|sensor_msgs/Image|左侧USB相机图像Topic|
 |**/usb_right**|sensor_msgs/Image|右侧USB相机图像Topic|
 |**/usb_back**|sensor_msgs/Image|后侧USB相机图像Topic|
-|**/color/yolov5**|depthai_ros_msgs/SpatialDetectionArray|OAK相机推理结果Topic|
+|**/usb_front**|sensor_msgs/Image|前方USB相机图像Topic|
 #### 1.2.2 发布话题
 |话题|消息类型|描述|
 |----|-----|----|
